@@ -1,116 +1,150 @@
 """
-person1_parser.py — Instruction Parser & Decoder
+person2_alu.py — ALU & Register File
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 1
+Owner: Person 2
 
 RESPONSIBILITY:
-    Take a MIPS assembly program (as a text string or file path) and return
-    a list of instruction dicts using make_instruction() from common.py.
-    This module has NO dependencies on any other team member's code.
+    Implement the ALU (arithmetic/logic operations) and the register file
+    (read/write). Pure logic — no dependency on any other team member's code.
 
 INTERFACE CONTRACT (do not change signatures):
-    parse_program(source: str) -> list[dict]
-    parse_line(line: str)      -> dict | None
-    resolve_labels(instructions: list[dict]) -> list[dict]
+    alu_execute(op, a, b)              -> int
+    register_read(cpu_state, rs, rt)   -> (int, int)
+    register_write(cpu_state, rd, val) -> dict
+    sign_extend(imm, bits=16)          -> int
 
 TESTING:
-    Run this file directly: python person1_parser.py
+    Run this file directly: python person2_alu.py
 """
 
-from common import (
-    make_instruction,
-    SUPPORTED_INSTRUCTIONS,
-    REGISTER_NAMES,
-)
+from common import make_cpu_state
 
 
 # ─────────────────────────────────────────────
 # PUBLIC API
 # ─────────────────────────────────────────────
 
-def parse_program(source: str) -> list:
+def alu_execute(op: str, a: int, b: int) -> tuple:
     """
-    Parse a full MIPS assembly program.
+    Perform an ALU operation.
 
     Args:
-        source (str): Multi-line MIPS assembly text
-                      (labels allowed, comments with '#')
+        op (str): Operation name — "add", "sub", "and", "or", "slt"
+        a  (int): First operand (value of rs, after forwarding)
+        b  (int): Second operand (value of rt OR sign-extended immediate)
 
     Returns:
-        list[dict]: Ordered list of instruction dicts ready for simulation.
-                    Branch targets are resolved to PC indices (integers).
+        tuple: (result: int, zero_flag: bool)
+               zero_flag is True when result == 0 (used for BEQ)
+
+    Supported ops: "add", "sub", "and", "or", "slt"
+    Raise ValueError for unsupported ops.
+    """
+    # TODO: Person 2 implements this
+    raise NotImplementedError("Person 2: implement alu_execute()")
+
+
+def register_read(cpu_state: dict, rs: int, rt: int) -> tuple:
+    """
+    Read two registers from the register file.
+
+    Args:
+        cpu_state (dict): Current CPU state (from make_cpu_state())
+        rs        (int):  Index of first source register
+        rt        (int):  Index of second source register
+
+    Returns:
+        tuple: (val_rs: int, val_rt: int)
+
+    Note: $zero (register 0) always returns 0.
+    """
+    # TODO: Person 2 implements this
+    raise NotImplementedError("Person 2: implement register_read()")
+
+
+def register_write(cpu_state: dict, rd: int, value: int) -> dict:
+    """
+    Write a value to a register. Returns updated cpu_state.
+
+    Args:
+        cpu_state (dict): Current CPU state
+        rd        (int):  Destination register index
+        value     (int):  Value to write
+
+    Returns:
+        dict: Updated cpu_state (modify in-place and return)
+
+    Note: Writes to $zero (register 0) are silently ignored.
+    """
+    # TODO: Person 2 implements this
+    raise NotImplementedError("Person 2: implement register_write()")
+
+
+def sign_extend(imm: int, bits: int = 16) -> int:
+    """
+    Sign-extend an immediate value from `bits` width to Python int.
+
+    Args:
+        imm  (int): Raw immediate value (unsigned, as parsed)
+        bits (int): Original bit width (default 16 for MIPS I-type)
+
+    Returns:
+        int: Sign-extended value (may be negative)
 
     Example:
-        program = '''
-            addi $t0, $zero, 5
-            addi $t1, $zero, 3
-            add  $t2, $t0, $t1
-        '''
-        instructions = parse_program(program)
+        sign_extend(0xFFFF, 16) -> -1
+        sign_extend(0x0005, 16) ->  5
     """
-    # TODO: Person 1 implements this
-    # Suggested steps:
-    #   1. Strip comments and blank lines
-    #   2. First pass: collect label -> line_index mapping
-    #   3. Second pass: call parse_line() on each non-label line
-    #   4. Call resolve_labels() to convert label references to PC offsets
-    raise NotImplementedError("Person 1: implement parse_program()")
-
-
-def parse_line(line: str) -> dict:
-    """
-    Parse a single MIPS assembly instruction line into an instruction dict.
-
-    Args:
-        line (str): A single cleaned instruction string e.g. "add $t0, $t1, $t2"
-
-    Returns:
-        dict: Instruction dict from make_instruction(), or None if line is empty/label-only.
-
-    Hints:
-        - Split on commas and whitespace
-        - Look up register names using REGISTER_NAMES
-        - Handle sign extension for immediates (imm can be negative)
-        - Use SUPPORTED_INSTRUCTIONS to validate ops
-    """
-    # TODO: Person 1 implements this
-    raise NotImplementedError("Person 1: implement parse_line()")
-
-
-def resolve_labels(instructions: list, label_map: dict) -> list:
-    """
-    Replace label strings in branch/jump instructions with PC indices.
-
-    Args:
-        instructions (list[dict]): Output of the first parse pass
-        label_map    (dict):       { label_name: pc_index }
-
-    Returns:
-        list[dict]: Same instructions with imm fields resolved to integers
-    """
-    # TODO: Person 1 implements this
-    raise NotImplementedError("Person 1: implement resolve_labels()")
+    # TODO: Person 2 implements this
+    raise NotImplementedError("Person 2: implement sign_extend()")
 
 
 # ─────────────────────────────────────────────
-# QUICK SELF-TEST (run: python person1_parser.py)
+# QUICK SELF-TEST (run: python person2_alu.py)
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    test_program = """
-    # Simple test program
-    addi $t0, $zero, 10
-    addi $t1, $zero, 20
-    add  $t2, $t0, $t1
-    sw   $t2, 0($zero)
-    lw   $t3, 0($zero)
-    """
+    tests = [
+        ("add",  5,  3,  8,    False),
+        ("sub",  5,  5,  0,    True),
+        ("sub",  3,  7, -4,    False),
+        ("and",  0b1100, 0b1010, 0b1000, False),
+        ("or",   0b1100, 0b1010, 0b1110, False),
+        ("slt",  3,  5,  1,    False),
+        ("slt",  5,  3,  0,    False),
+    ]
 
+    print("ALU Tests:")
+    for op, a, b, expected_result, expected_zero in tests:
+        try:
+            result, zero = alu_execute(op, a, b)
+            status = "PASS" if result == expected_result and zero == expected_zero else "FAIL"
+            print(f"  [{status}] {op}({a}, {b}) = {result} (zero={zero})")
+        except NotImplementedError as e:
+            print(f"  [STUB] {e}")
+            break
+
+    print("\nRegister File Tests:")
+    state = make_cpu_state()
+    state["registers"][8] = 42   # $t0 = 42
+    state["registers"][9] = 7    # $t1 = 7
     try:
-        result = parse_program(test_program)
-        print(f"Parsed {len(result)} instructions:")
-        for i, instr in enumerate(result):
-            print(f"  [{i}] {instr}")
+        v_rs, v_rt = register_read(state, 8, 9)
+        print(f"  register_read($t0, $t1) = ({v_rs}, {v_rt})  expected (42, 7)")
+        state = register_write(state, 10, 99)
+        print(f"  register_write($t2, 99) -> $t2 = {state['registers'][10]}  expected 99")
+        state = register_write(state, 0, 999)
+        print(f"  register_write($zero, 999) -> $zero = {state['registers'][0]}  expected 0")
     except NotImplementedError as e:
-        print(f"[STUB] {e}")
-        print("Expected output: list of 5 instruction dicts")
+        print(f"  [STUB] {e}")
+
+    print("\nSign Extension Tests:")
+    se_tests = [(0xFFFF, 16, -1), (0x0005, 16, 5), (0x8000, 16, -32768)]
+    for val, bits, expected in se_tests:
+        try:
+            result = sign_extend(val, bits)
+            status = "PASS" if result == expected else "FAIL"
+            print(f"  [{status}] sign_extend({hex(val)}, {bits}) = {result}  expected {expected}")
+        except NotImplementedError as e:
+            print(f"  [STUB] {e}")
+            break
