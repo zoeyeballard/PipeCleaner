@@ -125,7 +125,7 @@ Running `python person6_metrics.py` with all stubs removed should produce a tabl
 | Day        | Goal                                                              |
 |------------|-------------------------------------------------------------------|
 | Tue Apr 14 | Everyone reads common.py and their own stub file                  |
-| Wed Apr 15 | Person 1, 2, 5 self-tests passing                                 |
+| Wed Apr 15 | Person 1, 2, 5 self-tests passing, all people finish all programs              |
 | Thu Apr 16 | Person 3 integrated (1+2), Person 4 integrated (2+5)              |
 | Fri Apr 17 | Person 6 integrated (3+4), full comparison report running         |
 | Sat Apr 18 | All test programs pass, edge cases verified, report written       |
