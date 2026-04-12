@@ -1,4 +1,4 @@
-# PipeCleaner
+# <img src="assets/pipecleaner.png" height="34" /> PipeCleaner
 
 PipeCleaner is an educational MIPS CPU simulation project for comparing a
 single-cycle processor against a classic 5-stage pipelined processor.
