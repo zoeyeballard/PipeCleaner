@@ -124,12 +124,12 @@ Running `python person6_metrics.py` with all stubs removed should produce a tabl
 
 | Day        | Goal                                                              |
 |------------|-------------------------------------------------------------------|
-| Today      | Everyone reads common.py and their own stub file                  |
-| Mon Apr 14 | Person 1, 2, 5 self-tests passing                                 |
-| Wed Apr 16 | Person 3 integrated (1+2), Person 4 integrated (2+5)              |
-| Thu Apr 17 | Person 6 integrated (3+4), full comparison report running         |
-| Fri Apr 18 | All test programs pass, edge cases verified, report written       |
-| Sun Apr 20 | Submit                                                            |
+| Tue Apr 14 | Everyone reads common.py and their own stub file                  |
+| Wed Apr 15 | Person 1, 2, 5 self-tests passing                                 |
+| Thu Apr 16 | Person 3 integrated (1+2), Person 4 integrated (2+5)              |
+| Fri Apr 17 | Person 6 integrated (3+4), full comparison report running         |
+| Sat Apr 18 | All test programs pass, edge cases verified, report written       |
+| Sun Apr 19 | Submit                                                            |
 
 ---
 
