@@ -1,7 +1,7 @@
 """
 person4_pipeline.py — 5-Stage Pipeline Stage Logic
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 4
+Owner: Alex Samano
 
 RESPONSIBILITY:
     Implement each of the 5 pipeline stages (IF, ID, EX, MEM, WB) as
