@@ -1,7 +1,7 @@
 """
 person6_metrics.py — Performance Metrics Engine & Test Suite
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 6
+Owner: Zoey
 
 RESPONSIBILITY:
     1. Consume execution logs from Person 3 (single-cycle) and Person 4
