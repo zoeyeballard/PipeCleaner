@@ -8,7 +8,7 @@
 ```
 test_files/
 ├── common.py               ← SHARED — everyone imports from here. Do not modify alone.
-├── person1_parser.py       ← Person 1: MIPS text → instruction dicts
+├── person1_parser.py       ← Ricardo Perez: MIPS text → instruction dicts
 ├── person2_alu.py          ← Person 2: ALU operations + register file
 ├── person3_single_cycle.py ← Person 3: Single-cycle execution loop
 ├── person4_pipeline.py     ← Alex: 5-stage pipeline (IF/ID/EX/MEM/WB)
