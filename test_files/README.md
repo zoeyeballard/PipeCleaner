@@ -10,7 +10,7 @@ test_files/
 ├── common.py               ← SHARED — everyone imports from here. Do not modify alone.
 ├── person1_parser.py       ← Ricardo Perez: MIPS text → instruction dicts
 ├── person2_alu.py          ← Person 2: ALU operations + register file
-├── person3_single_cycle.py ← Person 3: Single-cycle execution loop
+├── person3_single_cycle.py ← Gyan: Single-cycle execution loop
 ├── person4_pipeline.py     ← Alex: 5-stage pipeline (IF/ID/EX/MEM/WB)
 ├── person5_hazard.py       ← Person 5: Hazard detection + forwarding unit
 └── person6_metrics.py      ← Person 6: Metrics, test programs, comparison report
