@@ -1,7 +1,7 @@
 """
 person1_parser.py — Instruction Parser & Decoder
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 1
+Owner: Ricardo Perez
 
 RESPONSIBILITY:
     Take a MIPS assembly program (as a text string or file path) and return
