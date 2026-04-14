@@ -173,8 +173,27 @@ def compute_metrics(log: list, total_instructions: int, clock_period_ns: float =
         latency      = total_cycles * clock_period_ns
         throughput   = total_instructions / total_cycles   (IPC)
     """
-    # TODO: Person 6 implements this
-    raise NotImplementedError("Person 6: implement compute_metrics()")
+    m = make_metrics()
+
+    if not log or total_instructions == 0:
+        return m
+
+    # total_cycles = max cycle index in log + 1
+    total_cycles = max(entry["cycle"] for entry in log) + 1
+
+    # Count stall and flush events (each log entry that has the event tag)
+    stall_cycles = sum(1 for entry in log if entry["event"] == "stall")
+    flush_cycles = sum(1 for entry in log if entry["event"] == "flush")
+
+    m["total_instructions"] = total_instructions
+    m["total_cycles"]       = total_cycles
+    m["stall_cycles"]       = stall_cycles
+    m["flush_cycles"]       = flush_cycles
+    m["cpi"]                = total_cycles / total_instructions
+    m["latency"]            = total_cycles * clock_period_ns
+    m["throughput"]         = total_instructions / total_cycles   # IPC
+
+    return m
 
 
 def compare_simulators(
@@ -200,8 +219,32 @@ def compare_simulators(
             "cpi_overhead": float,   # pipelined_cpi - ideal_cpi (1.0)
         }
     """
-    # TODO: Person 6 implements this
-    raise NotImplementedError("Person 6: implement compare_simulators()")
+    single_metrics   = compute_metrics(single_log,   n_instructions, clock_period_ns)
+    pipeline_metrics = compute_metrics(pipeline_log, n_instructions, clock_period_ns)
+
+    single_cycles   = single_metrics["total_cycles"]
+    pipeline_cycles = pipeline_metrics["total_cycles"]
+
+    # Avoid division by zero if something went wrong
+    speedup      = (single_cycles / pipeline_cycles) if pipeline_cycles > 0 else 0.0
+    # Ideal pipelined CPI is 1.0; overhead is how much worse we actually did
+    cpi_overhead = pipeline_metrics["cpi"] - 1.0
+
+    # Also fill in the cross-comparison fields defined in make_metrics()
+    single_metrics["single_cycle_cycles"]   = single_cycles
+    single_metrics["pipelined_cycles"]      = pipeline_cycles
+    single_metrics["speedup"]               = speedup
+
+    pipeline_metrics["single_cycle_cycles"] = single_cycles
+    pipeline_metrics["pipelined_cycles"]    = pipeline_cycles
+    pipeline_metrics["speedup"]             = speedup
+
+    return {
+        "single_cycle": single_metrics,
+        "pipelined":    pipeline_metrics,
+        "speedup":      speedup,
+        "cpi_overhead": cpi_overhead,
+    }
 
 
 def print_report(comparison: dict, program_name: str = "test") -> None:
@@ -226,8 +269,110 @@ def print_report(comparison: dict, program_name: str = "test") -> None:
         ║ Speedup (single/pipelined): 0.50x        ║
         ╚══════════════════════════════════════════╝
     """
-    # TODO: Person 6 implements this
-    raise NotImplementedError("Person 6: implement print_report()")
+    sc = comparison["single_cycle"]
+    pp = comparison["pipelined"]
+    speedup      = comparison["speedup"]
+    cpi_overhead = comparison["cpi_overhead"]
+
+    # ── Layout constants ──────────────────────────────────────────────────────
+    W_TOTAL  = 50          # total inner width (between the outer ║ chars)
+    W_LABEL  = 18          # width of the metric label column
+    W_COL    = 12          # width of each value column (Single / Pipelined)
+    # Total check: 1 (left ║) + W_LABEL + 1 (│) + W_COL + 1 (│) + W_COL + 1 (right ║)
+    # = 1 + 18 + 1 + 12 + 1 + 12 + 1 = 46  → pad W_TOTAL to 46 for clean fit
+
+    # Helper: center a string inside a field of given width
+    def c(text, width):
+        return text.center(width)
+
+    # Helper: right-align a number string inside a field
+    def r(text, width):
+        return text.rjust(width - 1).ljust(width)
+
+    # Horizontal rule builders
+    def rule_top():
+        return "╔" + "═" * W_TOTAL + "╗"
+
+    def rule_mid_header():
+        # Split rule with ╦ to visually separate the header
+        left  = W_LABEL + 1          # label col + separator │
+        right = W_TOTAL - left - 1   # remainder minus the ╩ char
+        return "╠" + "═" * left + "╦" + "═" * right + "╣"
+
+    def rule_mid():
+        left  = W_LABEL + 1
+        right = W_TOTAL - left - 1
+        return "╠" + "═" * left + "╩" + "═" * right + "╣"
+
+    def rule_sep():
+        return "╠" + "═" * W_TOTAL + "╣"
+
+    def rule_bot():
+        return "╚" + "═" * W_TOTAL + "╝"
+
+    # ── Row builders ─────────────────────────────────────────────────────────
+    def title_row(text):
+        inner = c(text, W_TOTAL)
+        return "║" + inner + "║"
+
+    def header_row():
+        label = c("Metric",     W_LABEL)
+        col1  = c("Single",     W_COL)
+        col2  = c("Pipelined",  W_COL)
+        return "║ " + label + "│" + col1 + "│" + col2 + " ║"
+
+    def data_row(label, single_val, pipe_val):
+        lbl  = label.ljust(W_LABEL - 1)
+        col1 = c(single_val, W_COL)
+        col2 = c(pipe_val,   W_COL)
+        return "║ " + lbl + "│" + col1 + "│" + col2 + " ║"
+
+    def summary_row(text):
+        inner = (" " + text).ljust(W_TOTAL)
+        return "║" + inner + "║"
+
+    # ── Format values ────────────────────────────────────────────────────────
+    def fmt_int(v):   return str(int(v))
+    def fmt_f3(v):    return f"{v:.3f}"
+
+    # ── Assemble report ───────────────────────────────────────────────────────
+    title = f"MIPS Performance Analysis: {program_name}"
+
+    lines = [
+        rule_top(),
+        title_row(title),
+        rule_mid_header(),
+        header_row(),
+        rule_mid(),
+        data_row("Total Instructions",
+                 fmt_int(sc["total_instructions"]),
+                 fmt_int(pp["total_instructions"])),
+        data_row("Total Cycles",
+                 fmt_int(sc["total_cycles"]),
+                 fmt_int(pp["total_cycles"])),
+        data_row("Stall Cycles",
+                 fmt_int(sc["stall_cycles"]),
+                 fmt_int(pp["stall_cycles"])),
+        data_row("Flush Cycles",
+                 fmt_int(sc["flush_cycles"]),
+                 fmt_int(pp["flush_cycles"])),
+        data_row("CPI",
+                 fmt_f3(sc["cpi"]),
+                 fmt_f3(pp["cpi"])),
+        data_row("Throughput (IPC)",
+                 fmt_f3(sc["throughput"]),
+                 fmt_f3(pp["throughput"])),
+        data_row("Latency (ns)",
+                 fmt_f3(sc["latency"]),
+                 fmt_f3(pp["latency"])),
+        rule_sep(),
+        summary_row(f"Speedup (single / pipelined): {speedup:.2f}x"),
+        summary_row(f"CPI Overhead (vs ideal 1.0):  {cpi_overhead:+.3f}"),
+        rule_bot(),
+    ]
+
+    print("\n".join(lines))
+    print()   # blank line between reports
 
 
 # ─────────────────────────────────────────────
