@@ -1,7 +1,7 @@
 """
 person3_single_cycle.py — Single-Cycle MIPS Simulator
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 3
+Owner: Gyan
 
 RESPONSIBILITY:
     Wire together the parser (Person 1) and ALU (Person 2) into a
