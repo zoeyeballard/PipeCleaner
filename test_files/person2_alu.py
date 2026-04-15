@@ -1,7 +1,7 @@
 """
-person2_alu.py — ALU & Register File
+rolandoU_alu.py — ALU & Register File
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 2
+Owner: Rolando Steve Uribe
 
 RESPONSIBILITY:
     Implement the ALU (arithmetic/logic operations) and the register file
@@ -14,7 +14,7 @@ INTERFACE CONTRACT (do not change signatures):
     sign_extend(imm, bits=16)          -> int
 
 TESTING:
-    Run this file directly: python person2_alu.py
+    Run this file directly: python rolandoU_alu.py
 """
 
 from common import make_cpu_state
@@ -40,8 +40,22 @@ def alu_execute(op: str, a: int, b: int) -> tuple:
     Supported ops: "add", "sub", "and", "or", "slt"
     Raise ValueError for unsupported ops.
     """
-    # TODO: Person 2 implements this
-    raise NotImplementedError("Person 2: implement alu_execute()")
+    if op == "add":
+        result = a + b
+    elif op == "sub":
+        result = a - b
+    elif op == "and":
+        result = a & b
+    elif op == "or":
+        result = a | b
+    elif op == "slt":
+        result = 1 if a < b else 0   # signed "set less than"
+    else:
+        raise ValueError(f"Unsupported ALU operation: {op}")
+    
+    zero_flag = (result == 0)
+    return result, zero_flag
+
 
 
 def register_read(cpu_state: dict, rs: int, rt: int) -> tuple:
@@ -58,8 +72,13 @@ def register_read(cpu_state: dict, rs: int, rt: int) -> tuple:
 
     Note: $zero (register 0) always returns 0.
     """
-    # TODO: Person 2 implements this
-    raise NotImplementedError("Person 2: implement register_read()")
+    registers = cpu_state["registers"]
+    
+    # $zero is hardwired to 0
+    val_rs = 0 if rs == 0 else registers[rs]
+    val_rt = 0 if rt == 0 else registers[rt]
+    
+    return val_rs, val_rt
 
 
 def register_write(cpu_state: dict, rd: int, value: int) -> dict:
@@ -76,8 +95,10 @@ def register_write(cpu_state: dict, rd: int, value: int) -> dict:
 
     Note: Writes to $zero (register 0) are silently ignored.
     """
-    # TODO: Person 2 implements this
-    raise NotImplementedError("Person 2: implement register_write()")
+    if rd != 0:  # ignore writes to $zero
+        cpu_state["registers"][rd] = value
+    
+    return cpu_state
 
 
 def sign_extend(imm: int, bits: int = 16) -> int:
@@ -95,8 +116,9 @@ def sign_extend(imm: int, bits: int = 16) -> int:
         sign_extend(0xFFFF, 16) -> -1
         sign_extend(0x0005, 16) ->  5
     """
-    # TODO: Person 2 implements this
-    raise NotImplementedError("Person 2: implement sign_extend()")
+    if imm >= (1 << (bits - 1)):
+        imm -= (1 << bits)
+    return imm
 
 
 # ─────────────────────────────────────────────
@@ -111,7 +133,7 @@ if __name__ == "__main__":
         ("and",  0b1100, 0b1010, 0b1000, False),
         ("or",   0b1100, 0b1010, 0b1110, False),
         ("slt",  3,  5,  1,    False),
-        ("slt",  5,  3,  0,    False),
+        ("slt",  5,  3,  0,    True),
     ]
 
     print("ALU Tests:")
