@@ -45,6 +45,7 @@ def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
         dict: make_hazard_signals() dict with stall, flush, forward_a, forward_b set
     """
     # TODO: Person 5 implements this
+    
     # Suggested structure:
     #   signals = make_hazard_signals()
     #   signals["stall"]     = needs_stall(ID_EX, EX_MEM)
@@ -133,26 +134,26 @@ def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
         tuple: (forward_a: str, forward_b: str)
                Each is one of "REG", "EX_MEM", "MEM_WB"
     """
-    #
+    
     forwardA = 0 # No Forwarding
     forwardB = 0 # No Forwarding
     # ---------- Forward A (uses rs) ----------
     if EX_MEM["reg_write"] and EX_MEM["write_reg"] != 0:
         if EX_MEM["write_reg"] == ID_EX["rs"]:
-            forwardA = 2 # Forward from EX stage
+            forwardA = "EX_MEM" # Forward from EX stage
 
     if MEM_WB["reg_write"] and MEM_WB["write_reg"] != 0:
         if (MEM_WB["write_reg"] == ID_EX["rs"]) and forwardA == 0: # So its only used after EX stage 
-            forwardA = 1 # Forward from MEM stage
+            forwardA = "MEM_WB" # Forward from MEM stage
 
     # ---------- Forward B (uses rt) ----------
     if EX_MEM["reg_write"] and EX_MEM["write_reg"] != 0:
         if EX_MEM["write_reg"] == ID_EX["rt"]:
-            forwardB = 2 # Forward from EX stage
+            forwardB = "EX_MEM" # Forward from EX stage
 
     if MEM_WB["RegWrite"] and MEM_WB["rd"] != 0:
         if (MEM_WB["write_reg"] == ID_EX["rt"]) and forwardB == 0:  # So its only used after EX stage 
-            forwardB = 1 # Forward from MEM stage
+            forwardB = "MEM_WB" # Forward from MEM stage
 
     return (forwardA, forwardB)
 
