@@ -132,8 +132,8 @@ def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
                Each is one of "REG", "EX_MEM", "MEM_WB"
     """
     
-    forwardA = "Reg" # No Forwarding
-    forwardB = "Reg" # No Forwarding
+    forwardA = "REG" # No Forwarding
+    forwardB = "REG" # No Forwarding
     # ---------- Forward A (uses rs) ----------
     if EX_MEM["reg_write"] and EX_MEM["write_reg"] != 0:
         if EX_MEM["write_reg"] == ID_EX["rs"]:
