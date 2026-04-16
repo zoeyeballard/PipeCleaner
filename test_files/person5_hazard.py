@@ -1,7 +1,7 @@
 """
 person5_hazard.py — Hazard Detection & Forwarding Unit
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 5
+Owner: Leziga Beage
 
 RESPONSIBILITY:
     Each cycle, inspect the current pipeline latch contents and decide:
@@ -101,8 +101,12 @@ def needs_flush(EX_MEM: dict) -> bool:
     Returns:
         bool: True if IF/ID and ID/EX should be flushed (replaced with NOPs)
     """
-    # TODO: Person 5 implements this
-    raise NotImplementedError("Person 5: implement needs_flush()")
+    #If its a branch it  need to be flushed
+    if EX_MEM.get('branch', True):  
+        return True
+    
+    # the ALU zero flag will not be a factor since it returns true for both
+    return False
 
 
 def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
