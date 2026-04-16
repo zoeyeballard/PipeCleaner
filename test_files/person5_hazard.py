@@ -74,7 +74,7 @@ def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     if not EX_MEM.get('mem_read', False):
         return False
 
-    load_dest = EX_MEM.get('rt')
+    load_dest = EX_MEM.get('write_reg')
     src1 = ID_EX.get('rs')
     src2 = ID_EX.get('rt')
 
