@@ -24,37 +24,44 @@ from common import (
 )
 
 
-# ─────────────────────────────────────────────
-# PUBLIC API
-# ─────────────────────────────────────────────
+def parse_program(source):
+    #get the string
+    raw_lines = source.split('n')
 
-def parse_program(source: str) -> list:
-    """
-    Parse a full MIPS assembly program.
+    # create array of characters 
+    clean_lines = [];
+    
+    for line in raw_lines:
+        if '#' in line:
+            parts = line.split('#')
+            line = parts[0];
+        #remove extra spaces from the end
+        line = line.strip()
 
-    Args:
-        source (str): Multi-line MIPS assembly text
-                      (labels allowed, comments with '#')
+        #add to the string array of instruction
+        if line != "":
+            clean_lines.append(line)
 
-    Returns:
-        list[dict]: Ordered list of instruction dicts ready for simulation.
-                    Branch targets are resolved to PC indices (integers).
+    label_map = {}
+    pc_index = 0
+    instruction_only = [];
 
-    Example:
-        program = '''
-            addi $t0, $zero, 5
-            addi $t1, $zero, 3
-            add  $t2, $t0, $t1
-        '''
-        instructions = parse_program(program)
-    """
-    # TODO: Person 1 implements this
-    # Suggested steps:
-    #   1. Strip comments and blank lines
-    #   2. First pass: collect label -> line_index mapping
-    #   3. Second pass: call parse_line() on each non-label line
-    #   4. Call resolve_labels() to convert label references to PC offsets
-    raise NotImplementedError("Person 1: implement parse_program()")
+    for line in clean_lines:
+        if ':' in line:
+            parts = line.split(':')
+            label_name parts[0];
+            instruction_part = parts[1].strips()
+
+            label_map[label_name] = pc_index
+
+        if instruction_part != "":
+            instruction_only.append(instruction_part)
+            pc_index = pc_index +1
+
+
+        
+        
+        
 
 
 def parse_line(line: str) -> dict:
