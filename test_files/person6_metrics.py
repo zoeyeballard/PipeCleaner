@@ -27,6 +27,42 @@ TESTING:
 
 from common import make_metrics
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# This file currently compares simulator logs.
+# To match the prototype analyzer branch and professor sample output, add:
+# - project3-style formatter (Processed N file(s), counts, mode sections)
+# - per-file analyzer driver
+# - CLI for single file and --all directory mode
+# - throughput conversion to instr/s using picosecond totals
+#
+# Recommended additional top-level functions are scaffolded below.
+
+
+# TODO (prototype parity): project3-style output formatter.
+def format_project3_style_report(file_name, instructions, single_metrics, pipeline_metrics):
+    """Scaffold: format output to match professor sample layout and wording."""
+    raise NotImplementedError("Scaffold only: implement format_project3_style_report")
+
+
+# TODO (prototype parity): per-file analyzer entry point.
+def analyze_file(file_path):
+    """Scaffold: parse one file, run both modes, return formatted report text."""
+    raise NotImplementedError("Scaffold only: implement analyze_file")
+
+
+# TODO (prototype parity): discover .asm inputs when --all is requested.
+def discover_input_files(target_dir):
+    """Scaffold: return list of .asm files from target directory."""
+    raise NotImplementedError("Scaffold only: implement discover_input_files")
+
+
+# TODO (prototype parity): command-line interface entry point.
+def run_cli(argv=None):
+    """Scaffold: handle single-file and all-files analyzer execution."""
+    raise NotImplementedError("Scaffold only: implement run_cli")
+
 USE_STUBS = True
 
 if not USE_STUBS:
@@ -73,6 +109,9 @@ else:
 # (write these first — everyone uses them)
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: shared simulator test programs.
+# PROTOTYPE NOTE: keep for simulator validation; analyzer CLI should consume
+# professor-provided files directly.
 def get_test_programs() -> dict:
     """
     Shared test programs for all team members.
@@ -153,6 +192,9 @@ def get_test_programs() -> dict:
 # METRICS COMPUTATION
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: computes metrics from simulator logs.
+# PROTOTYPE NOTE: analytical mode may bypass logs and compute metrics directly
+# from counts and timing constants.
 def compute_metrics(log: list, total_instructions: int, clock_period_ns: float = 1.0) -> dict:
     """
     Compute performance metrics from an execution log.
@@ -196,6 +238,9 @@ def compute_metrics(log: list, total_instructions: int, clock_period_ns: float =
     return m
 
 
+# CURRENT FUNCTION: compares simulator outputs.
+# PROTOTYPE NOTE: retain for compatibility; analyzer branch may compare direct
+# analytical metric dictionaries instead.
 def compare_simulators(
     single_log: list,
     pipeline_log: list,
@@ -247,6 +292,8 @@ def compare_simulators(
     }
 
 
+# CURRENT FUNCTION: simulator-style table printer.
+# PROTOTYPE CHANGE: add project3-style print path for grading output parity.
 def print_report(comparison: dict, program_name: str = "test") -> None:
     """
     Print a formatted side-by-side comparison report to stdout.

@@ -24,11 +24,44 @@ TESTING:
 
 from common import make_hazard_signals
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# This file currently implements dynamic hazard decisions for cycle simulation.
+# To match the prototype analyzer branch, add a static sequence analyzer that
+# scans decoded instructions and reports aggregate hazards.
+#
+# Recommended scaffold additions:
+# - _read_regs(...) and _write_reg(...) helpers
+# - analyze_hazards(instructions) returning stall/raw/load-use counts
+# - optional compatibility wrapper so pipeline simulator still works
+
+
+# TODO (prototype parity): infer source registers used by an instruction.
+def _read_regs(instr):
+    """Scaffold: return set of registers read by instruction."""
+    raise NotImplementedError("Scaffold only: implement _read_regs for analyzer parity")
+
+
+# TODO (prototype parity): infer destination register written by instruction.
+def _write_reg(instr):
+    """Scaffold: return destination register index or 0 if no write."""
+    raise NotImplementedError("Scaffold only: implement _write_reg for analyzer parity")
+
+
+# TODO (prototype parity): static hazard counting across instruction list.
+def analyze_hazards(instructions):
+    """Scaffold: count RAW, load-use, and stall cycles analytically."""
+    raise NotImplementedError("Scaffold only: implement analyze_hazards for prototype parity")
+
 
 # ─────────────────────────────────────────────
 # PUBLIC API
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: cycle-level hazard signal generation.
+# PROTOTYPE CHANGE: keep this for simulator path; add analyze_hazards(...) for
+# analytical pipeline metrics.
 def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
     """
     Master hazard detection function called once per cycle by Person 4's pipeline loop.
@@ -54,6 +87,9 @@ def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
     return signals
 
 
+# CURRENT FUNCTION: load-use stall detection in dynamic pipeline simulation.
+# PROTOTYPE NOTE: static analyzer should reuse equivalent logic by scanning
+# adjacent instruction dependencies.
 def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     """
     Detect a load-use hazard requiring a stall bubble.
@@ -85,6 +121,9 @@ def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     return False
 
 
+# CURRENT FUNCTION: control hazard flush decision.
+# PROTOTYPE NOTE: if analyzer includes branch penalties, use static branch count
+# and explicit policy constants.
 def needs_flush(EX_MEM: dict) -> bool:
     """
     Detect a branch-taken condition requiring a pipeline flush.
@@ -107,6 +146,8 @@ def needs_flush(EX_MEM: dict) -> bool:
     return False
 
 
+# CURRENT FUNCTION: forwarding path selection in dynamic simulation.
+# PROTOTYPE NOTE: analyzer mode typically only needs aggregate stall impact.
 def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
     """
     Determine forwarding paths for ALU inputs A and B.

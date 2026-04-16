@@ -4,6 +4,53 @@
 
 from common import make_instruction, SUPPORTED_INSTRUCTIONS, REGISTER_NAMES
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# To match the prototype branch analyzer behavior, this file should be extended
+# with a dual-input parser path:
+# 1) Assembly text lines (.asm)
+# 2) Hex machine-code lines (e.g. 0x20080000) and binary 32-bit strings
+#
+# Recommended additional helpers (scaffolded below, no full implementation):
+# - _read_source(...)          : accept either raw text or file path
+# - decode_machine_word(...)   : decode 32-bit integer into instruction dict
+# - _split_mem_operand(...)    : parse offset(base) operands
+# - _reg_num(...)              : map register name -> register index
+#
+# Label behavior for prototype parity:
+# - Resolve branch labels as PC-relative immediates
+# - Resolve jump labels as absolute instruction index
+# - Decide how to handle missing "end" labels (strict error vs fallback)
+
+
+# TODO (prototype parity): add optional path/file detection and source loading.
+def _read_source(source):
+    """Scaffold: return raw source text from either inline text or file path."""
+    raise NotImplementedError("Scaffold only: implement _read_source for prototype parity")
+
+
+# TODO (prototype parity): decode full 32-bit machine word (hex/binary input).
+def decode_machine_word(word):
+    """Scaffold: decode a 32-bit integer into canonical make_instruction format."""
+    raise NotImplementedError("Scaffold only: implement decode_machine_word for prototype parity")
+
+
+# TODO (prototype parity): centralize memory operand split/parsing.
+def _split_mem_operand(token):
+    """Scaffold: parse tokens like 4($t0) into (offset, base_register)."""
+    raise NotImplementedError("Scaffold only: implement _split_mem_operand for prototype parity")
+
+
+# TODO (prototype parity): centralize register lookup and validation.
+def _reg_num(name):
+    """Scaffold: map register name string to numeric register index."""
+    raise NotImplementedError("Scaffold only: implement _reg_num for prototype parity")
+
+
+# CURRENT FUNCTION: parses assembly-oriented source into instruction dicts.
+# PROTOTYPE CHANGE: call _read_source(...) first, and support mixed assembly +
+# machine-code files in the same pipeline.
 def parse_program(source):
     raw_lines = source.split('\n')
 
@@ -50,6 +97,9 @@ def parse_program(source):
     return final_instructions
 
 
+# CURRENT FUNCTION: decodes only binary-string input.
+# PROTOTYPE CHANGE: support both hex and binary by routing through
+# decode_machine_word(...), then normalizing to make_instruction fields.
 def decode_machine_code(bin_str):
     # slice up the 32 bits based on MIPS spec
     op_bin = bin_str[0:6]
@@ -114,6 +164,9 @@ def decode_machine_code(bin_str):
     )
 
 
+# CURRENT FUNCTION: line-level parser with assembly path and binary sniff.
+# PROTOTYPE CHANGE: add hex-line detection (0x........), stricter validation,
+# and shared helpers for register and memory-operand parsing.
 def parse_line(line):
     # sniffer to check if it's machine code
     is_bin = True
@@ -189,6 +242,9 @@ def parse_line(line):
     )
 
 
+# CURRENT FUNCTION: resolves labels to immediate fields.
+# PROTOTYPE CHANGE: branch labels should be PC-relative offsets; jump labels can
+# remain absolute indices based on project expectation.
 def resolve_labels(instructions, label_map):
     for inst in instructions:
         if inst["label"] != None:

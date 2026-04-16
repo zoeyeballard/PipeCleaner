@@ -28,12 +28,50 @@ from common import (
     make_instruction,
 )
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# This file currently performs full single-cycle simulation.
+# To match the prototype analyzer branch, add an analytical mode that computes:
+# - instruction type counts
+# - total non-pipeline execution time in picoseconds
+# - average latency and throughput
+# - single-cycle reference clock (max stage time)
+#
+# Recommended scaffold additions:
+# - DEFAULT_TIMING_PS lookup table
+# - classify_instruction(...) helper
+# - run_single_cycle_analyzer(...) path separate from simulation loop
+
+
+# TODO (prototype parity): use configurable per-type timing constants.
+DEFAULT_TIMING_PS = {
+    "lw": 800,
+    "sw": 700,
+    "R": 600,
+    "beq": 500,
+    "other": 600,
+}
+
+
+# TODO (prototype parity): classify each instruction into reporting categories.
+def classify_instruction(instr):
+    """Scaffold: map instruction dict -> one of lw/sw/R/beq/other."""
+    raise NotImplementedError("Scaffold only: implement classify_instruction for analyzer parity")
+
+
+# TODO (prototype parity): analytical non-pipeline metrics path.
+def run_single_cycle_analyzer(instructions, timing_ps=None):
+    """Scaffold: compute timing/count metrics without cycle-accurate execution."""
+    raise NotImplementedError("Scaffold only: implement run_single_cycle_analyzer for prototype parity")
+
 # ── Toggle this while Person 1 & 2 are still building ──
 USE_STUBS = True
 
 if not USE_STUBS:
     from person1_parser import parse_program
-    from person2_alu import alu_execute, register_read, register_write, sign_extend
+    # Use Rolando's ALU module directly so all execution paths share one source.
+    from rolandoU_alu import alu_execute, register_read, register_write, sign_extend
 else:
     # ── LOCAL STUBS — delete when real modules are ready ──
     def parse_program(source):
@@ -71,6 +109,9 @@ else:
 # PUBLIC API
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: full single-cycle simulator execution loop.
+# PROTOTYPE CHANGE: either keep this as compatibility mode or route to
+# run_single_cycle_analyzer(...) when analyzer mode is selected.
 def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
     """
     Execute a MIPS program in single-cycle mode.
@@ -190,6 +231,8 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
 # HELPERS
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: fetch helper for simulator mode.
+# PROTOTYPE NOTE: analyzer mode typically does not need stage-level fetch.
 def _fetch(instructions: list, pc: int) -> dict:
     """Return instruction at index pc, or a NOP if out of bounds."""
     if 0 <= pc < len(instructions):
@@ -197,6 +240,8 @@ def _fetch(instructions: list, pc: int) -> dict:
     return make_instruction("nop", "R")
 
 
+# CURRENT FUNCTION: memory stage helper for simulator mode.
+# PROTOTYPE NOTE: analyzer mode replaces this with static timing aggregation.
 def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: int) -> int:
     """
     Handle LW and SW memory operations.
@@ -233,6 +278,8 @@ def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: in
     return alu_result  # pass-through for all other ops
 
 
+# CURRENT FUNCTION: PC update helper for simulator mode.
+# PROTOTYPE NOTE: analyzer mode does not execute control flow dynamically.
 def _compute_next_pc(pc: int, instr: dict, zero_flag: bool, alu_result: int) -> int:
     """
     Determine the next PC value after this instruction.

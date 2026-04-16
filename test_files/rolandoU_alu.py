@@ -19,11 +19,32 @@ TESTING:
 
 from common import make_cpu_state
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE FINALIZATION NOTES (treat this as canonical Person 2 module)
+# -----------------------------------------------------------------------------
+# This file should be considered the single source of truth for ALU/register
+# behavior across the project.
+#
+# Finalization checklist to align with prototype branch integration:
+# 1) Keep all imports in other modules pointed at rolandoU_alu.py directly.
+# 2) Preserve the four public API signatures unchanged:
+#    - alu_execute(op, a, b)
+#    - register_read(cpu_state, rs, rt)
+#    - register_write(cpu_state, rd, value)
+#    - sign_extend(imm, bits=16)
+# 3) Keep this module pure logic (no parser/pipeline dependencies).
+# 4) If analyzer-specific helpers are needed later, add them as optional helpers
+#    without changing existing function contracts.
+# 5) Keep self-tests here as the ALU truth test used by the team.
+
 
 # ─────────────────────────────────────────────
 # PUBLIC API
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: canonical ALU operation implementation.
+# FINALIZATION NOTE: keep behavior stable because simulator modules depend on
+# result and zero_flag semantics exactly as implemented here.
 def alu_execute(op: str, a: int, b: int) -> tuple:
     """
     Perform an ALU operation.
@@ -58,6 +79,8 @@ def alu_execute(op: str, a: int, b: int) -> tuple:
 
 
 
+# CURRENT FUNCTION: canonical register read implementation.
+# FINALIZATION NOTE: preserve hardwired $zero read semantics.
 def register_read(cpu_state: dict, rs: int, rt: int) -> tuple:
     """
     Read two registers from the register file.
@@ -81,6 +104,8 @@ def register_read(cpu_state: dict, rs: int, rt: int) -> tuple:
     return val_rs, val_rt
 
 
+# CURRENT FUNCTION: canonical register write implementation.
+# FINALIZATION NOTE: preserve write-ignore behavior for register 0.
 def register_write(cpu_state: dict, rd: int, value: int) -> dict:
     """
     Write a value to a register. Returns updated cpu_state.
@@ -101,6 +126,9 @@ def register_write(cpu_state: dict, rd: int, value: int) -> dict:
     return cpu_state
 
 
+# CURRENT FUNCTION: canonical sign-extension helper.
+# FINALIZATION NOTE: keep this logic as shared immediate normalization helper
+# for parser/simulator execution paths.
 def sign_extend(imm: int, bits: int = 16) -> int:
     """
     Sign-extend an immediate value from `bits` width to Python int.

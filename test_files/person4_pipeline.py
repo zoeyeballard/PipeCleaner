@@ -36,10 +36,43 @@ from common import (
     make_instruction,
 )
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# This file currently targets cycle-accurate 5-stage simulation.
+# To match the prototype analyzer branch, add analytical pipeline reporting:
+# - pipelined_clock = single_cycle_clock / 5
+# - total_cycles = base_cycles + stall_cycles (+ optional branch penalty)
+# - CPI, execution time, latency, throughput
+#
+# Recommended scaffold additions:
+# - run_pipeline_analyzer(...) as separate path
+# - _compute_pipeline_clock(...) helper
+# - _estimate_pipeline_cycles(...) helper
+
+
+# TODO (prototype parity): compute analytical pipeline clock from timing table.
+def _compute_pipeline_clock(single_cycle_clock_ps, n_stages=5):
+    """Scaffold: derive pipelined clock from single-cycle reference clock."""
+    raise NotImplementedError("Scaffold only: implement _compute_pipeline_clock for analyzer parity")
+
+
+# TODO (prototype parity): estimate analytical cycle count from hazards.
+def _estimate_pipeline_cycles(total_instructions, stall_cycles, n_stages=5):
+    """Scaffold: compute base+stall cycle estimate for analyzer reports."""
+    raise NotImplementedError("Scaffold only: implement _estimate_pipeline_cycles for analyzer parity")
+
+
+# TODO (prototype parity): analytical pipeline metrics path.
+def run_pipeline_analyzer(instructions, timing_ps=None):
+    """Scaffold: compute pipelined metrics without stage-by-stage execution."""
+    raise NotImplementedError("Scaffold only: implement run_pipeline_analyzer for prototype parity")
+
 USE_STUBS = True
 
 if not USE_STUBS:
-    from person2_alu import alu_execute, register_read, register_write, sign_extend
+    # Use Rolando's ALU module directly so all execution paths share one source.
+    from rolandoU_alu import alu_execute, register_read, register_write, sign_extend
     from person5_hazard import detect_hazards
 else:
     def alu_execute(op, a, b):
@@ -69,6 +102,8 @@ else:
 # STAGE FUNCTIONS
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: IF stage implementation stub.
+# PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_IF(cpu_state: dict, instructions: list, hazard_signals: dict) -> dict:
     """
     Instruction Fetch stage.
@@ -88,6 +123,8 @@ def stage_IF(cpu_state: dict, instructions: list, hazard_signals: dict) -> dict:
     raise NotImplementedError("Person 4: implement stage_IF()")
 
 
+# CURRENT FUNCTION: ID stage implementation stub.
+# PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_ID(IF_ID: dict, cpu_state: dict, hazard_signals: dict) -> dict:
     """
     Instruction Decode / Register Read stage.
@@ -113,6 +150,8 @@ def stage_ID(IF_ID: dict, cpu_state: dict, hazard_signals: dict) -> dict:
     raise NotImplementedError("Person 4: implement stage_ID()")
 
 
+# CURRENT FUNCTION: EX stage implementation stub.
+# PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_EX(ID_EX: dict, hazard_signals: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
     """
     Execute / ALU stage.
@@ -137,6 +176,8 @@ def stage_EX(ID_EX: dict, hazard_signals: dict, EX_MEM: dict, MEM_WB: dict) -> d
     raise NotImplementedError("Person 4: implement stage_EX()")
 
 
+# CURRENT FUNCTION: MEM stage implementation stub.
+# PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_MEM(EX_MEM: dict, cpu_state: dict) -> tuple:
     """
     Memory Access stage.
@@ -154,6 +195,8 @@ def stage_MEM(EX_MEM: dict, cpu_state: dict) -> tuple:
     raise NotImplementedError("Person 4: implement stage_MEM()")
 
 
+# CURRENT FUNCTION: WB stage implementation stub.
+# PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_WB(MEM_WB: dict, cpu_state: dict) -> dict:
     """
     Write-Back stage.
@@ -175,6 +218,9 @@ def stage_WB(MEM_WB: dict, cpu_state: dict) -> dict:
 # MAIN PIPELINE LOOP
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: cycle-accurate pipeline driver stub.
+# PROTOTYPE CHANGE: either retain for simulator mode or dispatch to
+# run_pipeline_analyzer(...) for analyzer mode.
 def run_pipeline(instructions: list, initial_state: dict = None) -> tuple:
     """
     Execute a MIPS program through the 5-stage pipeline.
