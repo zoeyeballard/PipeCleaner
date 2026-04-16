@@ -1,220 +1,241 @@
-# person1_parser.py
-# ECE 5367 Final Project
-# Owner: Ricardo Perez
+"""
+person1_parser.py — Instruction Parser & Decoder
+ECE 5367 Final Project: Pipelined Performance Analyzer
+"""
+
+from pathlib import Path
 
 from common import make_instruction, SUPPORTED_INSTRUCTIONS, REGISTER_NAMES
 
-def parse_program(source):
-    raw_lines = source.split('\n')
+
+R_FUNCT_TO_OP = {
+    0x20: "add",
+    0x22: "sub",
+    0x24: "and",
+    0x25: "or",
+    0x2A: "slt",
+    0x00: "nop",
+}
+
+OPCODE_TO_OP = {
+    0x08: "addi",
+    0x23: "lw",
+    0x2B: "sw",
+    0x04: "beq",
+    0x05: "bne",
+    0x02: "j",
+}
+
+
+def parse_program(source: str) -> list:
+    """
+    Parse either source text or a filesystem path.
+
+    Supported line formats:
+    - Assembly: add $t0, $t1, $t2
+    - Binary machine code: 010101... (32 bits)
+    - Hex machine code: 0x20080000 or 20080000
+    """
+    raw_text = _read_source(source)
+    raw_lines = raw_text.splitlines()
 
     clean_lines = []
-    # clean up the comments and blank lines first
     for line in raw_lines:
-        if '#' in line:
-            line = line.split('#')[0]
-            
-        line = line.strip()
-        if line != "":
+        line = line.split("#", 1)[0].strip()
+        if line:
             clean_lines.append(line)
 
     label_map = {}
+    instruction_lines = []
     pc = 0
-    instructions = []
 
-    # find labels and map them to the PC
     for line in clean_lines:
-        if ':' in line:
-            parts = line.split(':')
-            lbl = parts[0].strip() 
-            inst = parts[1].strip() 
+        current = line
+        while ":" in current:
+            label, rest = current.split(":", 1)
+            label = label.strip()
+            if label:
+                label_map[label] = pc
+            current = rest.strip()
+            if not current:
+                break
 
-            label_map[lbl] = pc
-
-            # check if instruction is on the same line as the label
-            if inst != "":
-                instructions.append(inst)
-                pc += 1
-        else:
-            instructions.append(line)
+        if current:
+            instruction_lines.append(current)
             pc += 1
 
     parsed = []
-    for line in instructions:
-        # print("debug line:", line)
-        res = parse_line(line)
-        if res != None:
-            parsed.append(res)
+    for line in instruction_lines:
+        parsed_instr = parse_line(line)
+        if parsed_instr is not None:
+            parsed.append(parsed_instr)
 
-    # fix the labels at the very end
-    final_instructions = resolve_labels(parsed, label_map)
-    return final_instructions
+    return resolve_labels(parsed, label_map)
 
 
-def decode_machine_code(bin_str):
-    # slice up the 32 bits based on MIPS spec
-    op_bin = bin_str[0:6]
-    rs_bin = bin_str[6:11]
-    rt_bin = bin_str[11:16]
-    rd_bin = bin_str[16:21]
-    funct_bin = bin_str[26:32]
-    imm_bin = bin_str[16:32]
-    
-    opcode = int(op_bin, 2)
-    rs_num = int(rs_bin, 2)
-    rt_num = int(rt_bin, 2)
-    rd_num = int(rd_bin, 2)
-    
-    op = None
-    imm = None
-    lbl_ref = None
-    i_type = None
+def _read_source(source: str) -> str:
+    if "\n" in source or "\r" in source:
+        return source
 
-    # R-Type
+    path = Path(source)
+    if path.exists() and path.is_file():
+        return path.read_text(encoding="utf-8")
+
+    return source
+
+
+def decode_machine_word(word: int) -> dict:
+    opcode = (word >> 26) & 0x3F
+    rs = (word >> 21) & 0x1F
+    rt = (word >> 16) & 0x1F
+    rd = (word >> 11) & 0x1F
+    funct = word & 0x3F
+    imm_u16 = word & 0xFFFF
+    imm_s16 = imm_u16 if imm_u16 < 0x8000 else imm_u16 - 0x10000
+    j_addr = word & 0x03FFFFFF
+
     if opcode == 0:
-        i_type = "R"
-        funct = int(funct_bin, 2)
-        if funct == 32: op = "add"
-        elif funct == 34: op = "sub"
-        elif funct == 36: op = "and"
-        elif funct == 37: op = "or"
-        elif funct == 42: op = "slt"
-        
-    # I-Type / J-Type
-    else:
-        rd_num = None 
-        
-        # handle negative immediate values (two's complement)
-        if imm_bin[0] == '1': 
-            imm = int(imm_bin, 2) - 65536 
-        else:
-            imm = int(imm_bin, 2)
+        op = R_FUNCT_TO_OP.get(funct)
+        if op is None:
+            raise ValueError(f"Unsupported R-type funct: 0x{funct:02X}")
+        return make_instruction(op=op, instr_type="R", rs=rs, rt=rt, rd=rd, imm=0, raw=f"0x{word:08X}")
 
-        if opcode == 8: 
-            op = "addi"
-            i_type = "I"
-        elif opcode == 35: 
-            op = "lw"
-            i_type = "I"
-        elif opcode == 43: 
-            op = "sw"
-            i_type = "I"
-        elif opcode == 4: 
-            op = "beq"
-            i_type = "I"
-        elif opcode == 5: 
-            op = "bne"
-            i_type = "I"
-        elif opcode == 2:
-            op = "j"
-            i_type = "J"
+    op = OPCODE_TO_OP.get(opcode)
+    if op is None:
+        raise ValueError(f"Unsupported opcode: 0x{opcode:02X}")
 
-    return make_instruction(
-        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
-        imm=imm, label=lbl_ref, raw=bin_str
-    )
+    if op == "j":
+        return make_instruction(op=op, instr_type="J", rs=0, rt=0, rd=0, imm=j_addr, raw=f"0x{word:08X}")
+
+    return make_instruction(op=op, instr_type="I", rs=rs, rt=rt, rd=0, imm=imm_s16, raw=f"0x{word:08X}")
 
 
-def parse_line(line):
-    # sniffer to check if it's machine code
-    is_bin = True
-    if len(line) != 32:
-        is_bin = False
-    else:
-        for char in line:
-            if char != '0' and char != '1':
-                is_bin = False
+def parse_line(line: str):
+    raw = line.strip()
+    if not raw:
+        return None
 
-    if is_bin:
-        return decode_machine_code(line)
+    if len(raw) == 32 and all(ch in "01" for ch in raw):
+        return decode_machine_word(int(raw, 2))
 
-    raw = line
-    line = line.replace(",", "")
-    words = line.split()
-    
-    op = words[0]
-    rs_str = None
-    rt_str = None
-    rd_str = None
-    imm = None
-    lbl = None
-    i_type = None
-    
-    # figure out instruction pieces
-    if op in ["add", "sub", "and", "or", "slt"]:
-        i_type = "R"
-        rd_str = words[1]
-        rs_str = words[2]
-        rt_str = words[3]
-        
+    hex_candidate = raw[2:] if raw.lower().startswith("0x") else raw
+    if len(hex_candidate) == 8 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
+        return decode_machine_word(int(hex_candidate, 16))
+
+    line_no_commas = raw.replace(",", " ")
+    words = [w for w in line_no_commas.split() if w]
+    if not words:
+        return None
+
+    op = words[0].lower()
+    if op not in SUPPORTED_INSTRUCTIONS:
+        raise ValueError(f"Unsupported instruction: {op}")
+
+    rs = 0
+    rt = 0
+    rd = 0
+    imm = 0
+    label = None
+    instr_type = SUPPORTED_INSTRUCTIONS[op]["type"]
+
+    if op in {"add", "sub", "and", "or", "slt"}:
+        if len(words) != 4:
+            raise ValueError(f"Invalid R-type format: {raw}")
+        rd = _reg_num(words[1])
+        rs = _reg_num(words[2])
+        rt = _reg_num(words[3])
+
     elif op == "addi":
-        i_type = "I"
-        rt_str = words[1]
-        rs_str = words[2]
-        imm = int(words[3]) 
-        
-    elif op == "lw" or op == "sw":
-        i_type = "I"
-        rt_str = words[1]
-        # split 0($zero) into pieces
-        mem_part = words[2]
-        split_mem = mem_part.split('(') 
-        imm = int(split_mem[0]) 
-        rs_str = split_mem[1].replace(")", "") 
-        
-    elif op == "beq" or op == "bne":
-        i_type = "I"
-        rs_str = words[1]
-        rt_str = words[2]
-        lbl = words[3] 
+        if len(words) != 4:
+            raise ValueError(f"Invalid addi format: {raw}")
+        rt = _reg_num(words[1])
+        rs = _reg_num(words[2])
+        imm = int(words[3], 0)
+
+    elif op in {"lw", "sw"}:
+        if len(words) != 3:
+            raise ValueError(f"Invalid {op} format: {raw}")
+        rt = _reg_num(words[1])
+        imm_str, rs_str = _split_mem_operand(words[2])
+        imm = int(imm_str, 0)
+        rs = _reg_num(rs_str)
+
+    elif op in {"beq", "bne"}:
+        if len(words) != 4:
+            raise ValueError(f"Invalid {op} format: {raw}")
+        rs = _reg_num(words[1])
+        rt = _reg_num(words[2])
+        target = words[3]
+        if target.lstrip("-").isdigit():
+            imm = int(target, 10)
+        else:
+            label = target
 
     elif op == "j":
-        i_type = "J"
-        lbl = words[1]
-
-    rs_num = None
-    rt_num = None
-    rd_num = None
-
-    # convert strings to ints for the common dict
-    if rs_str in REGISTER_NAMES:
-        rs_num = REGISTER_NAMES.index(rs_str)
-    if rt_str in REGISTER_NAMES:
-        rt_num = REGISTER_NAMES.index(rt_str)
-    if rd_str in REGISTER_NAMES:
-        rd_num = REGISTER_NAMES.index(rd_str)
+        if len(words) != 2:
+            raise ValueError(f"Invalid j format: {raw}")
+        target = words[1]
+        if target.lstrip("-").isdigit():
+            imm = int(target, 10)
+        else:
+            label = target
 
     return make_instruction(
-        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
-        imm=imm, label=lbl, raw=raw
+        op=op,
+        instr_type=instr_type,
+        rs=rs,
+        rt=rt,
+        rd=rd,
+        imm=imm,
+        label=label,
+        raw=raw,
     )
 
 
-def resolve_labels(instructions, label_map):
-    for inst in instructions:
-        if inst["label"] != None:
-            target = inst["label"]
-            
-            # swap label text for the actual line number
-            if target in label_map:
-                inst["imm"] = label_map[target]
-                inst["label"] = None            
-                
+def _split_mem_operand(token: str):
+    if "(" not in token or not token.endswith(")"):
+        raise ValueError(f"Invalid memory operand: {token}")
+    imm_str, rs_part = token.split("(", 1)
+    return imm_str, rs_part[:-1]
+
+
+def _reg_num(name: str) -> int:
+    if name not in REGISTER_NAMES:
+        raise ValueError(f"Unknown register name: {name}")
+    return REGISTER_NAMES[name]
+
+
+def resolve_labels(instructions: list, label_map: dict) -> list:
+    for idx, inst in enumerate(instructions):
+        if inst["label"] is None:
+            continue
+
+        target = inst["label"]
+        if target not in label_map:
+            if target.lower() == "end":
+                label_map[target] = len(instructions)
+            else:
+                raise ValueError(f"Undefined label '{target}' referenced by: {inst['raw']}")
+
+        if inst["op"] in {"beq", "bne"}:
+            inst["imm"] = label_map[target] - (idx + 1)
+        else:
+            inst["imm"] = label_map[target]
+
+        inst["label"] = None
+
     return instructions
 
 
 if __name__ == "__main__":
-    # quick test block
     test_program = """
-    # test program
-    LOOP: addi $t0, $zero, 10
-    00000001000010010101000000100000 
+    addi $t0, $zero, 10
+    0x01095020
     beq  $t0, $t2, LOOP
+    LOOP: j LOOP
     """
 
-    try:
-        result = parse_program(test_program)
-        print("Parsed {} instructions:".format(len(result)))
-        for i, instr in enumerate(result):
-            print("  [{}] {}".format(i, instr))
-    except Exception as e:
-        print("Error: {}".format(e))
+    parsed = parse_program(test_program)
+    print(f"Parsed {len(parsed)} instructions")
+    for i, instr in enumerate(parsed):
+        print(f"[{i}] {instr}")
