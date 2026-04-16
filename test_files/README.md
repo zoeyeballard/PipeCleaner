@@ -12,7 +12,7 @@ test_files/
 ├── person2_alu.py          ← Person 2: ALU operations + register file
 ├── person3_single_cycle.py ← Gyan: Single-cycle execution loop
 ├── person4_pipeline.py     ← Alex: 5-stage pipeline (IF/ID/EX/MEM/WB)
-├── person5_hazard.py       ← Person 5: Hazard detection + forwarding unit
+├── person5_hazard.py       ← Leziga: Hazard detection + forwarding unit
 └── person6_metrics.py      ← Zoey: Metrics, test programs, comparison report
 ```
 
