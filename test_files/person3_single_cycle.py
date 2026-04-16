@@ -70,7 +70,6 @@ USE_STUBS = True
 
 if not USE_STUBS:
     from person1_parser import parse_program
-    # Use Rolando's ALU module directly so all execution paths share one source.
     from rolandoU_alu import alu_execute, register_read, register_write, sign_extend
 else:
     # ── LOCAL STUBS — delete when real modules are ready ──

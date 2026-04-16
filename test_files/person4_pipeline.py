@@ -71,7 +71,6 @@ def run_pipeline_analyzer(instructions, timing_ps=None):
 USE_STUBS = True
 
 if not USE_STUBS:
-    # Use Rolando's ALU module directly so all execution paths share one source.
     from rolandoU_alu import alu_execute, register_read, register_write, sign_extend
     from person5_hazard import detect_hazards
 else:
