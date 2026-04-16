@@ -72,8 +72,19 @@ def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     Returns:
         bool: True if a stall bubble must be inserted
     """
-    # TODO: Person 5 implements this
-    raise NotImplementedError("Person 5: implement needs_stall()")
+    # Check if current instruction is a load
+    if not EX_MEM.get('mem_read', False):
+        return False
+
+    load_dest = EX_MEM.get('rt')
+    src1 = ID_EX.get('rs')
+    src2 = ID_EX.get('rt')
+
+    # Check for hazard
+    if load_dest == src1 or load_dest == src2:
+        return True
+
+    return False
 
 
 def needs_flush(EX_MEM: dict) -> bool:
