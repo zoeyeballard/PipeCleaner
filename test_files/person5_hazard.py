@@ -47,14 +47,11 @@ def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
     # TODO: Person 5 implements this
     
     # Suggested structure:
-    #   signals = make_hazard_signals()
-    #   signals["stall"]     = needs_stall(ID_EX, EX_MEM)
-    #   signals["flush"]     = needs_flush(EX_MEM)
-    #   fa, fb               = forwarding_unit(ID_EX, EX_MEM, MEM_WB)
-    #   signals["forward_a"] = fa
-    #   signals["forward_b"] = fb
-    #   return signals
-    raise NotImplementedError("Person 5: implement detect_hazards()")
+    signals = make_hazard_signals()
+    signals["stall"]     = needs_stall(ID_EX, EX_MEM)
+    signals["flush"]     = needs_flush(EX_MEM)
+    signals["forward_a"], signals["forward_b"] = forwarding_unit(ID_EX, EX_MEM, MEM_WB)
+    return signals
 
 
 def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
