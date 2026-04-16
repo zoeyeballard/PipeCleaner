@@ -1,110 +1,77 @@
-"""
-person1_parser.py — Instruction Parser & Decoder
-ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Ricardo Perez
+# person1_parser.py
+# ECE 5367 Final Project
+# Owner: Ricardo Perez
 
-RESPONSIBILITY:
-    Take a MIPS assembly program (as a text string or file path) and return
-    a list of instruction dicts using make_instruction() from common.py.
-    This module has NO dependencies on any other team member's code.
-
-INTERFACE CONTRACT:
-    parse_program(source)
-    parse_line(line)
-    resolve_labels(instructions, label_map)
-
-TESTING:
-    Run this file directly: python person1_parser.py
-"""
-
-from common import (
-    make_instruction,
-    SUPPORTED_INSTRUCTIONS,
-    REGISTER_NAMES,
-)
+from common import make_instruction, SUPPORTED_INSTRUCTIONS, REGISTER_NAMES
 
 def parse_program(source):
-    # Break the giant block of text into individual lines we can actually read
     raw_lines = source.split('\n')
 
-    # --- PASS 1: CLEANUP ---
     clean_lines = []
-    
+    # clean up the comments and blank lines first
     for line in raw_lines:
-        # If there's a comment, we only want the actual code before the '#'
         if '#' in line:
-            parts = line.split('#')
-            line = parts[0]
+            line = line.split('#')[0]
             
-        # Strip off any weird invisible spaces or newlines from the edges
         line = line.strip()
-
-        # Throw away blank lines so they don't crash our parser later
         if line != "":
             clean_lines.append(line)
 
-    # --- PASS 2: FIND LABELS ---
     label_map = {}
-    pc_index = 0
-    instructions_only = []
+    pc = 0
+    instructions = []
 
+    # find labels and map them to the PC
     for line in clean_lines:
-        # Check if the line has a label (like "LOOP:")
         if ':' in line:
             parts = line.split(':')
-            label_name = parts[0].strip() 
-            instruction_part = parts[1].strip() 
+            lbl = parts[0].strip() 
+            inst = parts[1].strip() 
 
-            # Map the label name to the current line number (Program Counter)
-            label_map[label_name] = pc_index
+            label_map[lbl] = pc
 
-            # Sometimes people put the label and instruction on the same line
-            if instruction_part != "":
-                instructions_only.append(instruction_part)
-                pc_index = pc_index + 1
+            # check if instruction is on the same line as the label
+            if inst != "":
+                instructions.append(inst)
+                pc += 1
         else:
-            # It's just a normal instruction
-            instructions_only.append(line)
-            pc_index = pc_index + 1
+            instructions.append(line)
+            pc += 1
 
-    # --- PASS 3: PARSE INSTRUCTIONS ---
-    parsed_instructions = []
-    for line in instructions_only:
-        inst_dict = parse_line(line)
-        if inst_dict != None:
-            parsed_instructions.append(inst_dict)
+    parsed = []
+    for line in instructions:
+        # print("debug line:", line)
+        res = parse_line(line)
+        if res != None:
+            parsed.append(res)
 
-    # --- PASS 4: LINK LABELS ---
-    # We have to do this at the very end so that forward-jumping branches work
-    final_instructions = resolve_labels(parsed_instructions, label_map)
-    
+    # fix the labels at the very end
+    final_instructions = resolve_labels(parsed, label_map)
     return final_instructions
 
 
-def decode_machine_code(binary_string):
-    """Helper function to decode 32-bit binary strings."""
-    # Hardcode the slices based on the official MIPS hardware reference
-    opcode_bin = binary_string[0:6]
-    rs_bin     = binary_string[6:11]
-    rt_bin     = binary_string[11:16]
-    rd_bin     = binary_string[16:21]
-    funct_bin  = binary_string[26:32]
-    imm_bin    = binary_string[16:32]
+def decode_machine_code(bin_str):
+    # slice up the 32 bits based on MIPS spec
+    op_bin = bin_str[0:6]
+    rs_bin = bin_str[6:11]
+    rt_bin = bin_str[11:16]
+    rd_bin = bin_str[16:21]
+    funct_bin = bin_str[26:32]
+    imm_bin = bin_str[16:32]
     
-    # Convert the raw binary text (like '1010') into real integers
-    opcode = int(opcode_bin, 2)
+    opcode = int(op_bin, 2)
     rs_num = int(rs_bin, 2)
     rt_num = int(rt_bin, 2)
     rd_num = int(rd_bin, 2)
     
     op = None
     imm = None
-    label_ref = None
-    instr_type = None
+    lbl_ref = None
+    i_type = None
 
-    # R-Type instructions all share opcode 0, so we have to check 'funct'
+    # R-Type
     if opcode == 0:
-        instr_type = "R"
+        i_type = "R"
         funct = int(funct_bin, 2)
         if funct == 32: op = "add"
         elif funct == 34: op = "sub"
@@ -112,11 +79,11 @@ def decode_machine_code(binary_string):
         elif funct == 37: op = "or"
         elif funct == 42: op = "slt"
         
-    # I-Type / J-Type instructions
+    # I-Type / J-Type
     else:
-        rd_num = None # I-Types don't use the destination register
+        rd_num = None 
         
-        # Two's complement trick to handle negative numbers in binary
+        # handle negative immediate values (two's complement)
         if imm_bin[0] == '1': 
             imm = int(imm_bin, 2) - 65536 
         else:
@@ -124,50 +91,43 @@ def decode_machine_code(binary_string):
 
         if opcode == 8: 
             op = "addi"
-            instr_type = "I"
+            i_type = "I"
         elif opcode == 35: 
             op = "lw"
-            instr_type = "I"
+            i_type = "I"
         elif opcode == 43: 
             op = "sw"
-            instr_type = "I"
+            i_type = "I"
         elif opcode == 4: 
             op = "beq"
-            instr_type = "I"
+            i_type = "I"
         elif opcode == 5: 
             op = "bne"
-            instr_type = "I"
+            i_type = "I"
         elif opcode == 2:
             op = "j"
-            instr_type = "J"
+            i_type = "J"
 
     return make_instruction(
-        op=op, type=instr_type, rs=rs_num, rt=rt_num, rd=rd_num, 
-        imm=imm, label=label_ref, raw=binary_string
+        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
+        imm=imm, label=lbl_ref, raw=bin_str
     )
 
 
 def parse_line(line):
-    """
-    Parse a single MIPS assembly instruction line into an instruction dict.
-    """
-    # 1. THE SNIFFER: Did Person 6 give us a machine code string?
-    # Check if it's exactly 32 chars long and only contains 1s and 0s
-    is_machine_code = True
+    # sniffer to check if it's machine code
+    is_bin = True
     if len(line) != 32:
-        is_machine_code = False
+        is_bin = False
     else:
         for char in line:
             if char != '0' and char != '1':
-                is_machine_code = False
+                is_bin = False
 
-    if is_machine_code == True:
+    if is_bin:
         return decode_machine_code(line)
 
-    # 2. NORMAL ASSEMBLY PARSING
-    raw_line = line
-    
-    # Delete commas to make splitting the string 100x easier
+    raw = line
     line = line.replace(",", "")
     words = line.split()
     
@@ -176,51 +136,46 @@ def parse_line(line):
     rt_str = None
     rd_str = None
     imm = None
-    label_ref = None
-    instr_type = None
+    lbl = None
+    i_type = None
     
-    # R-Type: simple 3-register operations
-    if op == "add" or op == "sub" or op == "and" or op == "or" or op == "slt":
-        instr_type = "R"
+    # figure out instruction pieces
+    if op in ["add", "sub", "and", "or", "slt"]:
+        i_type = "R"
         rd_str = words[1]
         rs_str = words[2]
         rt_str = words[3]
         
-    # I-Type: math with an immediate value
     elif op == "addi":
-        instr_type = "I"
+        i_type = "I"
         rt_str = words[1]
         rs_str = words[2]
         imm = int(words[3]) 
         
-    # Memory: MIPS syntax is weird here (e.g., 0($zero)), so we split on '('
     elif op == "lw" or op == "sw":
-        instr_type = "I"
+        i_type = "I"
         rt_str = words[1]
-        memory_part = words[2]
-        mem_split = memory_part.split('(') 
+        # split 0($zero) into pieces
+        mem_part = words[2]
+        split_mem = mem_part.split('(') 
+        imm = int(split_mem[0]) 
+        rs_str = split_mem[1].replace(")", "") 
         
-        imm = int(mem_split[0]) # the offset number
-        rs_str = mem_split[1].replace(")", "") # strip the trailing bracket
-        
-    # Branches
     elif op == "beq" or op == "bne":
-        instr_type = "I"
+        i_type = "I"
         rs_str = words[1]
         rt_str = words[2]
-        label_ref = words[3] 
+        lbl = words[3] 
 
-    # Jumps
     elif op == "j":
-        instr_type = "J"
-        label_ref = words[1]
+        i_type = "J"
+        lbl = words[1]
 
-    # Map the human-readable string names ("$t0") to integer indices (8) 
-    # so Person 2's register array can actually use them
     rs_num = None
     rt_num = None
     rd_num = None
 
+    # convert strings to ints for the common dict
     if rs_str in REGISTER_NAMES:
         rs_num = REGISTER_NAMES.index(rs_str)
     if rt_str in REGISTER_NAMES:
@@ -228,23 +183,18 @@ def parse_line(line):
     if rd_str in REGISTER_NAMES:
         rd_num = REGISTER_NAMES.index(rd_str)
 
-    # Package everything up into the team's shared dictionary format
     return make_instruction(
-        op=op, type=instr_type, rs=rs_num, rt=rt_num, rd=rd_num, 
-        imm=imm, label=label_ref, raw=raw_line
+        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
+        imm=imm, label=lbl, raw=raw
     )
 
 
 def resolve_labels(instructions, label_map):
-    """
-    Replace label strings in branch/jump instructions with PC indices.
-    """
     for inst in instructions:
-        # If this instruction is pointing to a text label...
         if inst["label"] != None:
             target = inst["label"]
             
-            # ...and we know where that label is, swap it out for the line number
+            # swap label text for the actual line number
             if target in label_map:
                 inst["imm"] = label_map[target]
                 inst["label"] = None            
@@ -252,14 +202,10 @@ def resolve_labels(instructions, label_map):
     return instructions
 
 
-# ─────────────────────────────────────────────
-# QUICK SELF-TEST (run: python person1_parser.py)
-# ─────────────────────────────────────────────
-
 if __name__ == "__main__":
-    # A quick test to make sure we don't break the pipeline
+    # quick test block
     test_program = """
-    # Simple test program with Assembly AND Machine Code
+    # test program
     LOOP: addi $t0, $zero, 10
     00000001000010010101000000100000 
     beq  $t0, $t2, LOOP
