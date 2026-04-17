@@ -35,7 +35,15 @@ from common import (
     make_metrics,
     make_instruction,
 )
-
+from person5_hazard import analyze_hazards 
+# used for testing
+DEFAULT_TIMING_PS = {
+    "lw": 800,
+    "sw": 700,
+    "R": 600,
+    "beq": 500,
+    "other": 600,
+}
 # -----------------------------------------------------------------------------
 # PROTOTYPE MIGRATION NOTES (main branch scaffold only)
 # -----------------------------------------------------------------------------
@@ -101,6 +109,7 @@ else:
 # STAGE FUNCTIONS
 # ─────────────────────────────────────────────
 
+PIPELINE_STAGES = 5
 # CURRENT FUNCTION: IF stage implementation stub.
 # PROTOTYPE NOTE: analyzer mode generally bypasses explicit stage functions.
 def stage_IF(cpu_state: dict, instructions: list, hazard_signals: dict) -> dict:
@@ -118,7 +127,8 @@ def stage_IF(cpu_state: dict, instructions: list, hazard_signals: dict) -> dict:
     Returns:
         dict: New IF_ID pipeline register contents
     """
-    # TODO: Person 4 implements this
+    # Pass the current PC+1 foward so later stages can compute branch targets
+    return {"instruction":None, "pc_plus_4": cpu_state.get("pc",0)+1}
     raise NotImplementedError("Person 4: implement stage_IF()")
 
 
@@ -140,12 +150,8 @@ def stage_ID(IF_ID: dict, cpu_state: dict, hazard_signals: dict) -> dict:
     Returns:
         dict: New ID_EX pipeline register contents
     """
-    # TODO: Person 4 implements this
-    # Control signal hints:
-    #   R-type: reg_dst=True,  alu_src=False, reg_write=True,  mem_read=False, mem_write=False
-    #   LW:     reg_dst=False, alu_src=True,  reg_write=True,  mem_read=True,  mem_write=False
-    #   SW:     reg_dst=False, alu_src=True,  reg_write=False, mem_read=False, mem_write=True
-    #   BEQ:    reg_dst=False, alu_src=False, reg_write=False, mem_read=False, branch=True
+    # Foward the instruction into the ID/EX latch unchanged
+    return {"instruction": IF_ID.get("instruction")}
     raise NotImplementedError("Person 4: implement stage_ID()")
 
 
@@ -167,6 +173,8 @@ def stage_EX(ID_EX: dict, hazard_signals: dict, EX_MEM: dict, MEM_WB: dict) -> d
     Returns:
         dict: New EX_MEM pipeline register contents
     """
+    # Foward the instruction into the EX/MEM latch unchanged
+    return {"instruction": ID_EX.get("instruction")}
     # TODO: Person 4 implements this
     # Forwarding logic hint:
     #   if forward_a == "EX_MEM": use EX_MEM["alu_result"] as ALU input A
@@ -190,7 +198,8 @@ def stage_MEM(EX_MEM: dict, cpu_state: dict) -> tuple:
     Returns:
         tuple: (new MEM_WB latch dict, updated cpu_state dict)
     """
-    # TODO: Person 4 implements this
+    # Foward the instruction into the MEM/WB latch; cpu_state is unchanged
+    return {"instruction": EX_MEM.get("instruction")}, cpu_state 
     raise NotImplementedError("Person 4: implement stage_MEM()")
 
 
@@ -209,18 +218,18 @@ def stage_WB(MEM_WB: dict, cpu_state: dict) -> dict:
     Returns:
         dict: Updated cpu_state
     """
-    # TODO: Person 4 implements this
+    # No register file writes needed in the static analyzer path
+    return cpu_state
     raise NotImplementedError("Person 4: implement stage_WB()")
 
 
 # ─────────────────────────────────────────────
 # MAIN PIPELINE LOOP
 # ─────────────────────────────────────────────
-
 # CURRENT FUNCTION: cycle-accurate pipeline driver stub.
 # PROTOTYPE CHANGE: either retain for simulator mode or dispatch to
 # run_pipeline_analyzer(...) for analyzer mode.
-def run_pipeline(instructions: list, initial_state: dict = None) -> tuple:
+def run_pipeline(instructions: list, initial_state: dict = None, timing_ps: dict = None, assumed_branch_penalty: int =0 ) -> tuple:
     """
     Execute a MIPS program through the 5-stage pipeline.
 
@@ -246,8 +255,62 @@ def run_pipeline(instructions: list, initial_state: dict = None) -> tuple:
         8. Append log entries
         Stop when all stages hold NOPs and PC >= len(instructions)
     """
-    # TODO: Person 4 implements this
+    # Start from a blank CPU state or a provided one
+    cpu_state = make_cpu_state() if initial_state is None else initial_state
+
+
+    # Set up timer 
+    # Single-cycle clock = slowest instruction's full path
+    # Piplined clock = that same path plit evenly across PIPELINE_STAGES
+    timing = dict(DEFAULT_TIMING_PS)
+    if timing_ps:
+        timing.update(timing_ps)
+    single_cycle_clock_ps = max(timing["lw"], timing ["sw"], timing ["R"], timing ["beq"])
+    pipelined_clock_ps = single_cycle_clock_ps / PIPELINE_STAGES
+
+    # Hazard analysis
+    n = len(instructions)
+    hazard_stats = analyze_hazards(instructions)
+    stall_cycles = hazard_stats["stall_cycles"]
+    branch_cycles = hazard_stats["branch_instructions"] * max(assumed_branch_penalty, 0)
+
+    # Cycle Count
+    base_cycles = (n+ PIPELINE_STAGES - 1) if n else 0
+    total_cycles = base_cycles + stall_cycles + branch_cycles
+
+    # Performance metrics
+    cpi = (total_cycles /n) if n else 0.0 
+    total_time_ps = total_cycles * pipelined_clock_ps
+    avg_latency_ps = (total_time_ps / n) if n else 0.0
+    throughput_per_ps = (1.0 / avg_latency_ps) if avg_latency_ps else 0.0 
+
+    # Build log 
+    # One entry per instruction so performance analyzer UI can display a simplfied pipleline diagram
+    log = [
+    make_log_entry(cycle=i, stage="PIPE", instruction=instr, event=None)
+    for i, instr in enumerate(instructions)]
+
+    metrics = make_metrics()
+    metrics = make_metrics()
+    metrics["total_instructions"] = n
+    metrics["total_cycles"] = int(total_cycles)
+    metrics["stall_cycles"] = int(stall_cycles + branch_cycles)
+    metrics["flush_cycles"] = int(branch_cycles)   # branch-only contribution
+    metrics["cpi"] = float(cpi)
+    metrics["latency"] = float(total_time_ps)
+    metrics["throughput"] = float(throughput_per_ps)
+    metrics["single_cycle_clock_ps"]= float(single_cycle_clock_ps)
+    metrics["pipelined_clock_ps"]= float(pipelined_clock_ps)
+    metrics["total_time_ps"] = float(total_time_ps)
+    metrics["latency_ps"] = float(avg_latency_ps)
+    metrics["throughput_per_ps"] = float(throughput_per_ps)
+    metrics["hazards"] = hazard_stats          # full dict from Person 5
+    metrics["pipelined_cycles"] = int(total_cycles)
+ 
+    return cpu_state, log, metrics
+ 
     raise NotImplementedError("Person 4: implement run_pipeline()")
+
 
 
 # ─────────────────────────────────────────────
