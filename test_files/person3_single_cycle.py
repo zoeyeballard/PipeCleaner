@@ -15,9 +15,8 @@ DEPENDENCY STRATEGY:
 
 INTERFACE CONTRACT (do not change signatures):
     run_single_cycle(instructions, initial_state=None) -> (cpu_state, log, metrics)
-
-TESTING:
-    Run this file directly: python person3_single_cycle.py
+    classify_instruction(instr) -> str
+    run_single_cycle_analyzer(instructions, timing_ps=None) -> dict
 """
 
 import copy
@@ -27,43 +26,6 @@ from common import (
     make_log_entry,
     make_instruction,
 )
-
-# -----------------------------------------------------------------------------
-# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
-# -----------------------------------------------------------------------------
-# This file currently performs full single-cycle simulation.
-# To match the prototype analyzer branch, add an analytical mode that computes:
-# - instruction type counts
-# - total non-pipeline execution time in picoseconds
-# - average latency and throughput
-# - single-cycle reference clock (max stage time)
-#
-# Recommended scaffold additions:
-# - DEFAULT_TIMING_PS lookup table
-# - classify_instruction(...) helper
-# - run_single_cycle_analyzer(...) path separate from simulation loop
-
-
-# TODO (prototype parity): use configurable per-type timing constants.
-DEFAULT_TIMING_PS = {
-    "lw": 800,
-    "sw": 700,
-    "R": 600,
-    "beq": 500,
-    "other": 600,
-}
-
-
-# TODO (prototype parity): classify each instruction into reporting categories.
-def classify_instruction(instr):
-    """Scaffold: map instruction dict -> one of lw/sw/R/beq/other."""
-    raise NotImplementedError("Scaffold only: implement classify_instruction for analyzer parity")
-
-
-# TODO (prototype parity): analytical non-pipeline metrics path.
-def run_single_cycle_analyzer(instructions, timing_ps=None):
-    """Scaffold: compute timing/count metrics without cycle-accurate execution."""
-    raise NotImplementedError("Scaffold only: implement run_single_cycle_analyzer for prototype parity")
 
 # ── Toggle this while Person 1 & 2 are still building ──
 USE_STUBS = True
@@ -105,12 +67,126 @@ else:
 
 
 # ─────────────────────────────────────────────
-# PUBLIC API
+# TIMING CONSTANTS
 # ─────────────────────────────────────────────
 
-# CURRENT FUNCTION: full single-cycle simulator execution loop.
-# PROTOTYPE CHANGE: either keep this as compatibility mode or route to
-# run_single_cycle_analyzer(...) when analyzer mode is selected.
+# Per-instruction-type latency in picoseconds for the analytical mode.
+# The single-cycle clock period is the MAX of these values, because the
+# critical path must accommodate the slowest instruction class.
+DEFAULT_TIMING_PS = {
+    "lw":    800,   # IF + ID + EX (add) + MEM read + WB  — longest path
+    "sw":    700,   # IF + ID + EX (add) + MEM write       — no WB reg write
+    "R":     600,   # IF + ID + EX + WB                    — no memory stage
+    "beq":   500,   # IF + ID + EX (sub) + branch logic    — no WB
+    "other": 600,   # catch-all (addi, j, bne, nop, …)
+}
+
+
+# ─────────────────────────────────────────────
+# CLASSIFY INSTRUCTION
+# ─────────────────────────────────────────────
+
+def classify_instruction(instr: dict) -> str:
+    """
+    Map an instruction dict to one of the timing categories used by the analyzer.
+
+    Categories match the keys of DEFAULT_TIMING_PS:
+        "lw"    — load word
+        "sw"    — store word
+        "R"     — any R-type instruction (add, sub, and, or, slt, nop)
+        "beq"   — branch if equal (and bne, treated identically for timing)
+        "other" — everything else (addi, j, …)
+
+    Args:
+        instr (dict): Instruction dict produced by make_instruction()
+
+    Returns:
+        str: One of "lw", "sw", "R", "beq", "other"
+    """
+    op = instr.get("op", "nop")
+
+    if op == "lw":
+        return "lw"
+    if op == "sw":
+        return "sw"
+    if instr.get("type") == "R":
+        return "R"
+    if op in ("beq", "bne"):
+        return "beq"
+    return "other"
+
+
+# ─────────────────────────────────────────────
+# ANALYTICAL (NON-SIMULATION) ANALYZER
+# ─────────────────────────────────────────────
+
+def run_single_cycle_analyzer(instructions: list, timing_ps: dict = None) -> dict:
+    """
+    Compute single-cycle performance metrics analytically — without executing
+    the program cycle by cycle.
+
+    In a single-cycle implementation every instruction uses the same clock
+    period, which must be long enough for the *slowest* instruction class
+    (i.e. the critical-path latency).  All other performance numbers follow
+    from that constraint.
+
+    Args:
+        instructions (list[dict]): Parsed instruction list from Person 1.
+        timing_ps    (dict):       Optional override for per-type latencies in
+                                   picoseconds. Falls back to DEFAULT_TIMING_PS.
+
+    Returns:
+        dict with keys:
+            instruction_counts      (dict)  — {category: count} for each type
+            total_instructions      (int)   — total number of instructions
+            clock_period_ps         (int)   — single-cycle clock = max stage time
+            total_time_ps           (int)   — clock_period_ps * total_instructions
+            total_cycles            (int)   — same as total_instructions (CPI = 1)
+            cpi                     (float) — always 1.0 for single-cycle
+            avg_latency_ps          (float) — total_time_ps / total_instructions
+            throughput_instr_per_ps (float) — instructions per picosecond
+            timing_ps               (dict)  — the timing table actually used
+    """
+    timing = timing_ps if timing_ps is not None else DEFAULT_TIMING_PS
+
+    # ── Count instructions by category ───────────────────────────────────────
+    counts: dict = {cat: 0 for cat in timing}
+    for instr in instructions:
+        cat = classify_instruction(instr)
+        counts[cat] = counts.get(cat, 0) + 1
+
+    total_instructions = len(instructions)
+
+    # ── Derive clock period ───────────────────────────────────────────────────
+    # Single-cycle: one global clock period = worst-case (max) instruction time.
+    # Every instruction — fast or slow — waits for this period to expire.
+    clock_period_ps = max(timing.values()) if timing else 0
+
+    # ── Aggregate timing ──────────────────────────────────────────────────────
+    total_cycles    = total_instructions          # CPI = 1.0 always
+    total_time_ps   = clock_period_ps * total_instructions
+
+    cpi             = 1.0
+    avg_latency_ps  = float(total_time_ps / total_instructions) if total_instructions else 0.0
+    throughput      = (1.0 / clock_period_ps) if clock_period_ps else 0.0  # instr/ps
+
+    return {
+        "instruction_counts":       counts,
+        "total_instructions":       total_instructions,
+        "clock_period_ps":          clock_period_ps,
+        "total_time_ps":            total_time_ps,
+        "total_cycles":             total_cycles,
+        "cpi":                      cpi,
+        "avg_latency_ps":           avg_latency_ps,
+        "throughput_instr_per_ps":  throughput,
+        "timing_ps":                timing,
+    }
+
+
+# ─────────────────────────────────────────────
+# PUBLIC API — SIMULATION MODE
+# ─────────────────────────────────────────────
+
 def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
     """
     Execute a MIPS program in single-cycle mode.
@@ -135,7 +211,6 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
         5. Write-back: update destination register
         6. Advance PC (or branch)
     """
-    # Initialise CPU state
     cpu_state = copy.deepcopy(initial_state) if initial_state else make_cpu_state()
     log = []
     cycle = 0
@@ -146,33 +221,22 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
         # ── 1. Fetch ──────────────────────────────────────────
         instr = _fetch(instructions, pc)
 
-        # Stop when we fall off the end of the program
         if instr["op"] == "nop" and pc >= len(instructions):
             break
 
         # ── 2. Decode ─────────────────────────────────────────
         rs_val, rt_val = register_read(cpu_state, instr["rs"], instr["rt"])
-        imm = sign_extend(instr["imm"])  # safe for R-type (imm=0)
+        imm = sign_extend(instr["imm"])
 
         # ── 3. Execute ────────────────────────────────────────
-        # Determine ALU operation and operands
-        op = instr["op"]
-
-        # For I-type arithmetic/memory, second ALU input is the immediate
-        alu_b = imm if instr["type"] == "I" else rt_val
-
-        # addi is implemented as add in the ALU
+        op     = instr["op"]
+        alu_b  = imm if instr["type"] == "I" else rt_val
         alu_op = "add" if op == "addi" else op
 
-        # BEQ/BNE: subtract to test equality
         if op in ("beq", "bne"):
             alu_op = "sub"
-
-        # LW/SW: add base + offset to get effective address
         if op in ("lw", "sw"):
             alu_op = "add"
-
-        # NOP or J: dummy ALU call
         if op in ("nop", "j"):
             alu_result, zero_flag = 0, False
         else:
@@ -183,23 +247,16 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
 
         # ── 5. Write-back ─────────────────────────────────────
         if instr["type"] == "R" and op not in ("nop",):
-            # R-type: write to rd
             register_write(cpu_state, instr["rd"], alu_result)
-
         elif op == "addi":
-            # I-type arithmetic: write to rt
             register_write(cpu_state, instr["rt"], alu_result)
-
         elif op == "lw":
-            # Load word: write memory value to rt
             register_write(cpu_state, instr["rt"], mem_result)
-
-        # SW, BEQ, BNE, J: no register write-back
 
         # ── Log this cycle ────────────────────────────────────
         log.append(make_log_entry(
             cycle=cycle,
-            stage="WB",          # single-cycle: all stages collapse into one cycle
+            stage="WB",
             instruction=instr,
             event=None,
         ))
@@ -208,19 +265,24 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
         cpu_state["pc"] = _compute_next_pc(pc, instr, zero_flag, alu_result)
         cycle += 1
 
-        # Safety: prevent infinite loops in programs with tight jumps
         if cycle > 10_000:
             raise RuntimeError("Exceeded 10,000 cycles — possible infinite loop in program.")
 
     # ── Build metrics ─────────────────────────────────────────
+    # Route through the analytical path so simulation and analyzer modes
+    # report consistent clock period / latency / throughput numbers.
+    analyzer_metrics = run_single_cycle_analyzer(
+        [entry["instruction"] for entry in log]
+    )
+
     metrics = make_metrics()
     metrics["total_instructions"]  = len(log)
     metrics["total_cycles"]        = cycle
-    metrics["stall_cycles"]        = 0   # no stalls in single-cycle
-    metrics["flush_cycles"]        = 0   # no flushes in single-cycle
-    metrics["cpi"]        = (cycle / len(log)) if log else 0.0
-    metrics["latency"]    = float(cycle)       # caller can multiply by clock period
-    metrics["throughput"] = (len(log) / cycle) if cycle else 0.0
+    metrics["stall_cycles"]        = 0
+    metrics["flush_cycles"]        = 0
+    metrics["cpi"]                 = (cycle / len(log)) if log else 0.0
+    metrics["latency"]             = float(analyzer_metrics["total_time_ps"])
+    metrics["throughput"]          = analyzer_metrics["throughput_instr_per_ps"]
     metrics["single_cycle_cycles"] = cycle
 
     return cpu_state, log, metrics
@@ -230,8 +292,6 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
 # HELPERS
 # ─────────────────────────────────────────────
 
-# CURRENT FUNCTION: fetch helper for simulator mode.
-# PROTOTYPE NOTE: analyzer mode typically does not need stage-level fetch.
 def _fetch(instructions: list, pc: int) -> dict:
     """Return instruction at index pc, or a NOP if out of bounds."""
     if 0 <= pc < len(instructions):
@@ -239,8 +299,6 @@ def _fetch(instructions: list, pc: int) -> dict:
     return make_instruction("nop", "R")
 
 
-# CURRENT FUNCTION: memory stage helper for simulator mode.
-# PROTOTYPE NOTE: analyzer mode replaces this with static timing aggregation.
 def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: int) -> int:
     """
     Handle LW and SW memory operations.
@@ -253,32 +311,16 @@ def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: in
             Returns alu_result (unused by write-back stage for SW).
 
     For all other instructions: a no-op; returns alu_result unchanged.
-
-    Args:
-        cpu_state  (dict): current CPU state (memory dict lives here)
-        instr      (dict): the current instruction
-        alu_result (int):  effective address (for LW/SW) or ALU output
-        write_data (int):  value of rt register — data to store for SW
-
-    Returns:
-        int: value read from memory (LW) or alu_result (everything else)
     """
     op = instr["op"]
-
     if op == "lw":
-        # Read from memory; default to 0 for uninitialised addresses
         return cpu_state["memory"].get(alu_result, 0)
-
     elif op == "sw":
-        # Write rt's value to the effective address
         cpu_state["memory"][alu_result] = write_data
-        return alu_result  # not used by write-back, but keeps return type consistent
+        return alu_result
+    return alu_result
 
-    return alu_result  # pass-through for all other ops
 
-
-# CURRENT FUNCTION: PC update helper for simulator mode.
-# PROTOTYPE NOTE: analyzer mode does not execute control flow dynamically.
 def _compute_next_pc(pc: int, instr: dict, zero_flag: bool, alu_result: int) -> int:
     """
     Determine the next PC value after this instruction.
@@ -288,31 +330,16 @@ def _compute_next_pc(pc: int, instr: dict, zero_flag: bool, alu_result: int) -> 
         BNE: branch to pc + 1 + imm  if zero_flag is False (rs != rt)
         J:   jump  to instr["imm"]   unconditionally
         *:   sequential, pc + 1
-
-    Note: PC here is an instruction index (not a byte address), so
-    branch offset arithmetic is word-aligned by default — no shift needed.
-
-    Args:
-        pc         (int):  current instruction index
-        instr      (dict): the current instruction
-        zero_flag  (bool): ALU zero flag from this cycle's execute stage
-        alu_result (int):  ALU output (unused here, kept for signature parity)
-
-    Returns:
-        int: next PC value
     """
-    op = instr["op"]
+    op         = instr["op"]
     sequential = pc + 1
 
     if op == "beq":
-        return sequential + instr["imm"] if zero_flag else sequential
-
+        return sequential + instr["imm"] if zero_flag     else sequential
     if op == "bne":
         return sequential + instr["imm"] if not zero_flag else sequential
-
     if op == "j":
         return instr["imm"]
-
     return sequential
 
 
@@ -331,6 +358,8 @@ if __name__ == "__main__":
 
     instructions = parse_program(program_text)
 
+    # ── Simulation mode ───────────────────────────────────────
+    print("=== SIMULATION MODE ===")
     try:
         final_state, log, metrics = run_single_cycle(instructions)
         print("Final register state:")
@@ -341,6 +370,32 @@ if __name__ == "__main__":
         print(f"\nExecution log ({len(log)} entries):")
         for entry in log:
             print(f"  Cycle {entry['cycle']}: {entry['instruction']['raw']}")
-    except NotImplementedError as e:
-        print(f"[STUB] {e}")
-        print("Expected: $r8=10, $r9=20, $r10=30 after 3 cycles")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+
+    # ── Analytical mode ───────────────────────────────────────
+    print("\n=== ANALYZER MODE ===")
+    try:
+        analysis = run_single_cycle_analyzer(instructions)
+        print(f"  Instruction counts : {analysis['instruction_counts']}")
+        print(f"  Total instructions : {analysis['total_instructions']}")
+        print(f"  Clock period       : {analysis['clock_period_ps']} ps")
+        print(f"  Total time         : {analysis['total_time_ps']} ps")
+        print(f"  CPI                : {analysis['cpi']}")
+        print(f"  Avg latency        : {analysis['avg_latency_ps']:.1f} ps")
+        print(f"  Throughput         : {analysis['throughput_instr_per_ps']:.6f} instr/ps")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+
+    # ── classify_instruction spot-check ──────────────────────
+    print("\n=== CLASSIFY CHECK ===")
+    tests = [
+        make_instruction("lw",   "I", raw="lw $t0, 0($s0)"),
+        make_instruction("sw",   "I", raw="sw $t1, 4($s0)"),
+        make_instruction("add",  "R", raw="add $t2,$t0,$t1"),
+        make_instruction("beq",  "I", raw="beq $t0,$t1,label"),
+        make_instruction("addi", "I", raw="addi $t0,$zero,5"),
+        make_instruction("j",    "J", raw="j loop"),
+    ]
+    for t in tests:
+        print(f"  {t['raw']:30s} -> '{classify_instruction(t)}'")
