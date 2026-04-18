@@ -66,7 +66,7 @@ def _reg_num(name):
     # If the name exists in our team's shared list of registers
     if name in REGISTER_NAMES:
         # Return its index (its position in the list)
-        return REGISTER_NAMES.index(name)
+        return REGISTER_NAMES[name]
     return None
 
 
@@ -209,7 +209,7 @@ def decode_machine_code(bin_str):
 
     # Package everything up into the shared dictionary format for the team
     return make_instruction(
-        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
+        op=op, instr_type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
         imm=imm, label=lbl_ref, raw=bin_str
     )
 
@@ -294,7 +294,7 @@ def parse_line(line):
 
     # Package it into the team's shared dictionary format
     return make_instruction(
-        op=op, type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
+        op=op, instr_type=i_type, rs=rs_num, rt=rt_num, rd=rd_num, 
         imm=imm, label=lbl, raw=raw
     )
 
