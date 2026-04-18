@@ -349,3 +349,13 @@ if __name__ == "__main__":
             print("  [{}] {}".format(i, instr))
     except Exception as e:
         print("Error: {}".format(e))
+
+"""
+output:
+Parsed 4 instructions:
+  [0] {'op': 'addi', 'type': 'I', 'rs': 0, 'rt': 8, 'rd': None, 'imm': 10, 'label': None, 'raw': 'addi $t0, $zero, 10'}
+  [1] {'op': 'add', 'type': 'R', 'rs': 8, 'rt': 9, 'rd': 10, 'imm': None, 'label': None, 'raw': '00000001000010010101000000100000'}
+  [2] {'op': 'beq', 'type': 'I', 'rs': 10, 'rt': 10, 'rd': None, 'imm': 3, 'label': None, 'raw': '00010001010010100000000000000011'}
+  [3] {'op': 'beq', 'type': 'I', 'rs': 8, 'rt': 10, 'rd': None, 'imm': -4, 'label': None, 'raw': 'beq  $t0, $t2, LOOP'}
+
+"""
