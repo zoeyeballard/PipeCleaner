@@ -37,7 +37,6 @@ from common import (
 )
 from person5_hazard import analyze_hazards
 
-# used for testing
 from person3_single_cycle import DEFAULT_TIMING_PS
 PIPELINE_STAGES = 5
 
