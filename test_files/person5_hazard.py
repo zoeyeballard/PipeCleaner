@@ -44,15 +44,16 @@ def _read_regs(instr):
     if instr["op"] in ["add", "sub", "and", "or", "slt", "beq","bne"]:
         return {instr["rs"], instr["rt"]}
     elif instr["op"] in ["addi", "lw", "sw"]:
-        return instr["rs"]
+        return {instr["rs"]}
     #raise NotImplementedError("Scaffold only: implement _read_regs for analyzer parity")
 
 
 # TODO (prototype parity): infer destination register written by instruction.
 def _write_reg(instr):
-    """Scaffold: return destination register index or 0 if no write."""
     if instr["op"] in ["add", "sub", "and", "or", "slt"]:
         return instr["rd"]
+    elif instr["op"] in ["addi", "lw"]:
+        return instr["rt"]
     else:
         return 0
     #raise NotImplementedError("Scaffold only: implement _write_reg for analyzer parity")
@@ -64,20 +65,18 @@ def analyze_hazards(instructions):
     stall_cycles = 0
     branch_instructions = 0
     raw_hazards = 0
+    for instr in instructions:
+        if instr["op"] in ["beq", "bne"]:
+            branch_instructions += 1
     if len(instructions) > 1:
         for i in range(1, len(instructions)):
             prev_instr = instructions[i - 1]
             curr_instr = instructions[i]
 
-        if curr_instr["op"] == ["beq","bne"]: # type: ignore
-            branch_instructions+= 1
-        if _read_regs(curr_instr) == _write_reg(prev_instr): # pyright: ignore[reportPossiblyUnboundVariable]
-            raw_hazards +=1
-            if curr_instr["op"] == ["lw"]: # type: ignore
-                stall_cycles+=1
-    else:
-        if instructions["op"] == ["beq","bne"]:
-            branch_instructions+= 1
+            if _write_reg(prev_instr) in _read_regs(curr_instr) and _write_reg(prev_instr) !=0: # pyright: ignore[reportOperatorIssue, reportPossiblyUnboundVariable]
+                raw_hazards +=1
+                if prev_instr["op"] == "lw": # type: ignore
+                    stall_cycles+=1
     return {
         "stall_cycles":    stall_cycles,
         "branch_instructions":  branch_instructions,
