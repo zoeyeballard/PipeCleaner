@@ -38,14 +38,7 @@ from common import (
 from person5_hazard import analyze_hazards
 
 # used for testing
-DEFAULT_TIMING_PS = {
-    "lw": 800,
-    "sw": 700,
-    "R": 600,
-    "beq": 500,
-    "other": 600,
-}
-
+from person3_single_cycle import DEFAULT_TIMING_PS
 PIPELINE_STAGES = 5
 
 # ─────────────────────────────────────────────
