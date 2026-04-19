@@ -24,6 +24,7 @@ TESTING:
 
 from common import make_hazard_signals
 
+
 # -----------------------------------------------------------------------------
 # PROTOTYPE MIGRATION NOTES (main branch scaffold only)
 # -----------------------------------------------------------------------------
@@ -40,19 +41,50 @@ from common import make_hazard_signals
 # TODO (prototype parity): infer source registers used by an instruction.
 def _read_regs(instr):
     """Scaffold: return set of registers read by instruction."""
-    raise NotImplementedError("Scaffold only: implement _read_regs for analyzer parity")
+    if instr["op"] in ["add", "sub", "and", "or", "slt", "beq","bne"]:
+        return {instr["rs"], instr["rt"]}
+    elif instr["op"] in ["addi", "lw", "sw"]:
+        return instr["rs"]
+    #raise NotImplementedError("Scaffold only: implement _read_regs for analyzer parity")
 
 
 # TODO (prototype parity): infer destination register written by instruction.
 def _write_reg(instr):
     """Scaffold: return destination register index or 0 if no write."""
-    raise NotImplementedError("Scaffold only: implement _write_reg for analyzer parity")
+    if instr["op"] in ["add", "sub", "and", "or", "slt"]:
+        return instr["rd"]
+    else:
+        return 0
+    #raise NotImplementedError("Scaffold only: implement _write_reg for analyzer parity")
 
 
 # TODO (prototype parity): static hazard counting across instruction list.
 def analyze_hazards(instructions):
     """Scaffold: count RAW, load-use, and stall cycles analytically."""
-    raise NotImplementedError("Scaffold only: implement analyze_hazards for prototype parity")
+    stall_cycles = 0
+    branch_instructions = 0
+    raw_hazards = 0
+    if len(instructions) > 1:
+        for i in range(1, len(instructions)):
+            prev_instr = instructions[i - 1]
+            curr_instr = instructions[i]
+
+        if curr_instr["op"] == ["beq","bne"]: # type: ignore
+            branch_instructions+= 1
+        if _read_regs(curr_instr) == _write_reg(prev_instr): # pyright: ignore[reportPossiblyUnboundVariable]
+            raw_hazards +=1
+            if curr_instr["op"] == ["lw"]: # type: ignore
+                stall_cycles+=1
+    else:
+        if instructions["op"] == ["beq","bne"]:
+            branch_instructions+= 1
+    return {
+        "stall_cycles":    stall_cycles,
+        "branch_instructions":  branch_instructions,
+        "raw_hazards": raw_hazards
+        }
+
+    #raise NotImplementedError("Scaffold only: implement analyze_hazards for prototype parity")
 
 
 # ─────────────────────────────────────────────

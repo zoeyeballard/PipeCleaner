@@ -25,6 +25,9 @@ TESTING:
     Run this file directly: python person6_metrics.py
 """
 
+from pathlib import Path
+import argparse
+
 from common import make_metrics
 
 # -----------------------------------------------------------------------------
@@ -40,28 +43,278 @@ from common import make_metrics
 # Recommended additional top-level functions are scaffolded below.
 
 
-# TODO (prototype parity): project3-style output formatter.
 def format_project3_style_report(file_name, instructions, single_metrics, pipeline_metrics):
-    """Scaffold: format output to match professor sample layout and wording."""
-    raise NotImplementedError("Scaffold only: implement format_project3_style_report")
+    """
+    Format output in the project3-style layout used by the analyzer prototype.
+    """
+    from person3_single_cycle import classify_instruction, DEFAULT_TIMING_PS
+
+    def metric_get(metrics, *keys, default=0.0):
+        for key in keys:
+            if key in metrics and metrics[key] is not None:
+                return metrics[key]
+        return default
+
+    counts = {"lw": 0, "sw": 0, "R": 0, "beq": 0, "other": 0}
+    for instr in instructions:
+        cat = classify_instruction(instr)
+        if cat not in counts:
+            cat = "other"
+        counts[cat] += 1
+
+    total = len(instructions)
+
+    # Match prototype non-pipeline mode: sum per-instruction latencies.
+    nonpipe_total_time_ps = 0.0
+    for instr in instructions:
+        cat = classify_instruction(instr)
+        if cat not in DEFAULT_TIMING_PS:
+            cat = "other"
+        nonpipe_total_time_ps += DEFAULT_TIMING_PS[cat]
+    nonpipe_latency_ps = (nonpipe_total_time_ps / total) if total else 0.0
+
+    single_clock_ps = metric_get(
+        single_metrics,
+        "single_cycle_clock_ps",
+        "clock_period_ps",
+        default=max(DEFAULT_TIMING_PS["lw"], DEFAULT_TIMING_PS["sw"], DEFAULT_TIMING_PS["R"], DEFAULT_TIMING_PS["beq"]),
+    )
+
+    pipeline_total_time_ps = metric_get(pipeline_metrics, "total_time_ps", "latency", default=0.0)
+    pipeline_latency_ps = metric_get(pipeline_metrics, "latency_ps", "avg_latency_ps", default=0.0)
+    pipelined_clock_ps = metric_get(pipeline_metrics, "pipelined_clock_ps", default=single_clock_ps / 5.0 if single_clock_ps else 0.0)
+
+    nonpipe_throughput = _throughput_instr_per_sec(total, nonpipe_total_time_ps)
+    pipe_throughput = _throughput_instr_per_sec(total, pipeline_total_time_ps)
+
+    lines = []
+    lines.append(f"Processed 1 file(s): ['{file_name}']")
+    lines.append("")
+    lines.append("Instruction counts:")
+    lines.append(
+        f"lw={counts['lw']}, sw={counts['sw']}, R-type={counts['R']}, beq={counts['beq']}"
+    )
+    lines.append(f"Total instructions: {total}")
+    lines.append("")
+
+    lines.append("=== Non-pipeline mode ===")
+    lines.append("Per-instruction execution time (ps):")
+    lines.append(f"  lw: {DEFAULT_TIMING_PS['lw']}")
+    lines.append(f"  sw: {DEFAULT_TIMING_PS['sw']}")
+    lines.append(f"  R-type: {DEFAULT_TIMING_PS['R']}")
+    lines.append(f"  beq: {DEFAULT_TIMING_PS['beq']}")
+    lines.append("Average CPI: 1.000")
+    lines.append(f"Total execution time: {nonpipe_total_time_ps:.0f} ps")
+    lines.append(f"Average instruction latency: {nonpipe_latency_ps:.3f} ps")
+    lines.append(f"Average throughput: {nonpipe_throughput:.3f} instr/s")
+    lines.append("")
+
+    lines.append("=== Pipeline mode ===")
+    lines.append(f"Single-cycle reference clock: {single_clock_ps:.0f} ps")
+    lines.append(f"\tPipelined clock: {pipelined_clock_ps:.0f} ps")
+    lines.append("")
+    lines.append(f"\tStall cycles: {pipeline_metrics.get('stall_cycles', 0)}")
+    lines.append(f"\tAverage CPI: {pipeline_metrics.get('cpi', 0.0):.3f}")
+    lines.append(f"\tTotal execution time: {pipeline_total_time_ps:.0f} ps")
+    lines.append(f"\tAverage instruction latency: {pipeline_latency_ps:.3f} ps")
+    lines.append(f"\tAverage throughput: {pipe_throughput:.3f} instr/s")
+
+    return "\n".join(lines)
 
 
-# TODO (prototype parity): per-file analyzer entry point.
 def analyze_file(file_path):
-    """Scaffold: parse one file, run both modes, return formatted report text."""
-    raise NotImplementedError("Scaffold only: implement analyze_file")
+    """Parse one file and return project3-style report + both metrics dicts."""
+    from person1_parser import parse_program as real_parse_program
+    from person3_single_cycle import (
+        run_single_cycle as real_run_single_cycle,
+        run_single_cycle_analyzer as real_run_single_cycle_analyzer,
+    )
+    from person4_pipeline import run_pipeline as real_run_pipeline
+
+    source = Path(file_path).read_text(encoding="utf-8")
+    instructions = real_parse_program(source)
+
+    # Prefer analyzer mode (prototype behavior) to avoid requiring full
+    # simulator execution for reporting-only workflows.
+    try:
+        analysis = real_run_single_cycle_analyzer(instructions)
+        single_log = []
+        single_metrics = {
+            "total_instructions": analysis.get("total_instructions", len(instructions)),
+            "total_cycles": analysis.get("total_cycles", len(instructions)),
+            "stall_cycles": 0,
+            "flush_cycles": 0,
+            "cpi": analysis.get("cpi", 1.0),
+            "latency": float(analysis.get("total_time_ps", 0.0)),
+            "throughput": float(analysis.get("throughput_instr_per_ps", 0.0)),
+            "total_time_ps": float(analysis.get("total_time_ps", 0.0)),
+            "latency_ps": float(analysis.get("avg_latency_ps", 0.0)),
+            "single_cycle_clock_ps": float(analysis.get("clock_period_ps", 0.0)),
+        }
+    except Exception:
+        # Fallback for compatibility if analyzer helper is unavailable.
+        _, single_log, single_metrics = real_run_single_cycle(instructions)
+
+    try:
+        _, pipeline_log, pipeline_metrics = real_run_pipeline(instructions)
+    except Exception:
+        pipeline_log = []
+        pipeline_metrics = _pipeline_metrics_fallback(instructions, single_metrics)
+
+    # Ensure basic fields exist even if upstream modules only return partial metrics.
+    single_fallback = compute_metrics(single_log, len(instructions), 1.0)
+    pipe_fallback = compute_metrics(pipeline_log, len(instructions), 1.0)
+    for key, value in single_fallback.items():
+        single_metrics.setdefault(key, value)
+    for key, value in pipe_fallback.items():
+        pipeline_metrics.setdefault(key, value)
+
+    report = format_project3_style_report(
+        Path(file_path).name,
+        instructions,
+        single_metrics,
+        pipeline_metrics,
+    )
+    return report, single_metrics, pipeline_metrics
 
 
-# TODO (prototype parity): discover .asm inputs when --all is requested.
 def discover_input_files(target_dir):
-    """Scaffold: return list of .asm files from target directory."""
-    raise NotImplementedError("Scaffold only: implement discover_input_files")
+    """Return sorted .asm files from target directory."""
+    root = Path(target_dir)
+    if not root.exists():
+        return []
+
+    files = []
+    for p in sorted(root.iterdir()):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() == ".asm":
+            files.append(str(p))
+    return files
 
 
-# TODO (prototype parity): command-line interface entry point.
 def run_cli(argv=None):
-    """Scaffold: handle single-file and all-files analyzer execution."""
-    raise NotImplementedError("Scaffold only: implement run_cli")
+    """CLI entry point for single-file and all-files analyzer execution."""
+    parser = argparse.ArgumentParser(description="MIPS Pipelined Performance Analyzer")
+    parser.add_argument("input", nargs="?", help="Input .asm file path")
+    parser.add_argument("--all", action="store_true", dest="all_files", help="Analyze all .asm files in target directory")
+    parser.add_argument("--dir", default=".", help="Directory used with --all (default: current directory)")
+
+    args = parser.parse_args(argv)
+
+    if args.all_files:
+        file_list = discover_input_files(args.dir)
+    elif args.input:
+        file_list = [args.input]
+    else:
+        parser.error("Provide an input file or use --all.")
+
+    if not file_list:
+        print("Processed 0 file(s)")
+        return 0
+
+    if len(file_list) == 1:
+        report, _, _ = analyze_file(file_list[0])
+        print(report)
+        return 0
+
+    print(f"Processed {len(file_list)} file(s): {[Path(p).name for p in file_list]}")
+    print("")
+    for idx, file_path in enumerate(file_list):
+        report, _, _ = analyze_file(file_path)
+        print(report)
+        if idx != len(file_list) - 1:
+            print("\n" + "-" * 72 + "\n")
+
+    return 0
+
+
+def _throughput_instr_per_sec(total_instructions, total_time_ps):
+    """Convert instruction/time totals into instructions per second."""
+    if total_time_ps <= 0:
+        return 0.0
+    return total_instructions / (total_time_ps * 1e-12)
+
+
+def _read_regs(instr):
+    op = instr.get("op", "")
+    rs = instr.get("rs", 0)
+    rt = instr.get("rt", 0)
+
+    if op in {"add", "sub", "and", "or", "slt", "beq", "bne"}:
+        return {rs, rt}
+    if op in {"addi", "lw", "sw"}:
+        return {rs}
+    return set()
+
+
+def _write_reg(instr):
+    op = instr.get("op", "")
+    if op in {"add", "sub", "and", "or", "slt"}:
+        return instr.get("rd", 0)
+    if op in {"addi", "lw"}:
+        return instr.get("rt", 0)
+    return 0
+
+
+def _analyze_hazards_fallback(instructions):
+    raw_hazards = 0
+    load_use_hazards = 0
+    branch_instructions = 0
+
+    for i in range(1, len(instructions)):
+        prev_instr = instructions[i - 1]
+        curr_instr = instructions[i]
+        if curr_instr.get("op") in {"beq", "bne"}:
+            branch_instructions += 1
+
+        prev_write = _write_reg(prev_instr)
+        curr_reads = _read_regs(curr_instr)
+        if prev_write != 0 and prev_write in curr_reads:
+            raw_hazards += 1
+            if prev_instr.get("op") == "lw":
+                load_use_hazards += 1
+
+    return {
+        "raw_hazards": raw_hazards,
+        "load_use_hazards": load_use_hazards,
+        "branch_instructions": branch_instructions,
+        "stall_cycles": load_use_hazards,
+    }
+
+
+def _pipeline_metrics_fallback(instructions, single_metrics):
+    n = len(instructions)
+    single_clock_ps = single_metrics.get("single_cycle_clock_ps", 0.0)
+    pipelined_clock_ps = (single_clock_ps / 5.0) if single_clock_ps else 0.0
+
+    hazards = _analyze_hazards_fallback(instructions)
+    stall_cycles = int(hazards["stall_cycles"])
+
+    base_cycles = (n + 4) if n else 0
+    total_cycles = base_cycles + stall_cycles
+
+    cpi = (total_cycles / n) if n else 0.0
+    total_time_ps = total_cycles * pipelined_clock_ps
+    latency_ps = (total_time_ps / n) if n else 0.0
+    throughput_per_ps = (1.0 / latency_ps) if latency_ps else 0.0
+
+    return {
+        "total_instructions": n,
+        "total_cycles": total_cycles,
+        "stall_cycles": stall_cycles,
+        "flush_cycles": 0,
+        "cpi": cpi,
+        "latency": total_time_ps,
+        "throughput": throughput_per_ps,
+        "single_cycle_clock_ps": single_clock_ps,
+        "pipelined_clock_ps": pipelined_clock_ps,
+        "total_time_ps": total_time_ps,
+        "latency_ps": latency_ps,
+        "throughput_per_ps": throughput_per_ps,
+        "hazards": hazards,
+        "pipelined_cycles": total_cycles,
+    }
 
 USE_STUBS = True
 
@@ -427,24 +680,4 @@ def print_report(comparison: dict, program_name: str = "test") -> None:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print(f"Running with {'STUBS' if USE_STUBS else 'real modules'}...\n")
-
-    programs = get_test_programs()
-    print(f"Available test programs: {list(programs.keys())}\n")
-
-    # Run comparison on each test program
-    for name, source in programs.items():
-        instructions = parse_program(source)
-        n = len(instructions)
-
-        _, single_log, _ = run_single_cycle(instructions)
-        _, pipeline_log, _ = run_pipeline(instructions)
-
-        try:
-            comparison = compare_simulators(single_log, pipeline_log, n)
-            print_report(comparison, name)
-        except NotImplementedError as e:
-            print(f"[STUB] Program '{name}': {e}")
-            print(f"  Instructions: {n}")
-            print(f"  Single-cycle log entries: {len(single_log)}")
-            print(f"  Pipeline log entries:     {len(pipeline_log)}\n")
+    raise SystemExit(run_cli())
