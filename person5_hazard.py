@@ -1,7 +1,7 @@
 """
 person5_hazard.py — Hazard Detection & Forwarding Unit
 ECE 5367 Final Project: Pipelined Performance Analyzer
-Owner: Person 5
+Owner: Leziga Beage
 
 RESPONSIBILITY:
     Each cycle, inspect the current pipeline latch contents and decide:
@@ -25,10 +25,74 @@ TESTING:
 from common import make_hazard_signals
 
 
+# -----------------------------------------------------------------------------
+# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
+# -----------------------------------------------------------------------------
+# This file currently implements dynamic hazard decisions for cycle simulation.
+# To match the prototype analyzer branch, add a static sequence analyzer that
+# scans decoded instructions and reports aggregate hazards.
+#
+# Recommended scaffold additions:
+# - _read_regs(...) and _write_reg(...) helpers
+# - analyze_hazards(instructions) returning stall/raw/load-use counts
+# - optional compatibility wrapper so pipeline simulator still works
+
+
+# TODO (prototype parity): infer source registers used by an instruction.
+def _read_regs(instr):
+    """Scaffold: return set of registers read by instruction."""
+    if instr["op"] in ["add", "sub", "and", "or", "slt", "beq","bne"]:
+        return {instr["rs"], instr["rt"]}
+    elif instr["op"] in ["addi", "lw", "sw"]:
+        return {instr["rs"]}
+    #raise NotImplementedError("Scaffold only: implement _read_regs for analyzer parity")
+
+
+# TODO (prototype parity): infer destination register written by instruction.
+def _write_reg(instr):
+    if instr["op"] in ["add", "sub", "and", "or", "slt"]:
+        return instr["rd"]
+    elif instr["op"] in ["addi", "lw"]:
+        return instr["rt"]
+    else:
+        return 0
+    #raise NotImplementedError("Scaffold only: implement _write_reg for analyzer parity")
+
+
+# TODO (prototype parity): static hazard counting across instruction list.
+def analyze_hazards(instructions):
+    """Scaffold: count RAW, load-use, and stall cycles analytically."""
+    stall_cycles = 0
+    branch_instructions = 0
+    raw_hazards = 0
+    for instr in instructions:
+        if instr["op"] in ["beq", "bne"]:
+            branch_instructions += 1
+    if len(instructions) > 1:
+        for i in range(1, len(instructions)):
+            prev_instr = instructions[i - 1]
+            curr_instr = instructions[i]
+
+            if _write_reg(prev_instr) in _read_regs(curr_instr) and _write_reg(prev_instr) !=0: # pyright: ignore[reportOperatorIssue, reportPossiblyUnboundVariable]
+                raw_hazards +=1
+                if prev_instr["op"] == "lw": # type: ignore
+                    stall_cycles+=1
+    return {
+        "stall_cycles":    stall_cycles,
+        "branch_instructions":  branch_instructions,
+        "raw_hazards": raw_hazards
+        }
+
+    #raise NotImplementedError("Scaffold only: implement analyze_hazards for prototype parity")
+
+
 # ─────────────────────────────────────────────
 # PUBLIC API
 # ─────────────────────────────────────────────
 
+# CURRENT FUNCTION: cycle-level hazard signal generation.
+# PROTOTYPE CHANGE: keep this for simulator path; add analyze_hazards(...) for
+# analytical pipeline metrics.
 def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
     """
     Master hazard detection function called once per cycle by Person 4's pipeline loop.
@@ -45,17 +109,18 @@ def detect_hazards(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> dict:
         dict: make_hazard_signals() dict with stall, flush, forward_a, forward_b set
     """
     # TODO: Person 5 implements this
+    
     # Suggested structure:
-    #   signals = make_hazard_signals()
-    #   signals["stall"]     = needs_stall(ID_EX, EX_MEM)
-    #   signals["flush"]     = needs_flush(EX_MEM)
-    #   fa, fb               = forwarding_unit(ID_EX, EX_MEM, MEM_WB)
-    #   signals["forward_a"] = fa
-    #   signals["forward_b"] = fb
-    #   return signals
-    raise NotImplementedError("Person 5: implement detect_hazards()")
+    signals = make_hazard_signals()
+    signals["stall"]     = needs_stall(ID_EX, EX_MEM)
+    signals["flush"]     = needs_flush(EX_MEM)
+    signals["forward_a"], signals["forward_b"] = forwarding_unit(ID_EX, EX_MEM, MEM_WB)
+    return signals
 
 
+# CURRENT FUNCTION: load-use stall detection in dynamic pipeline simulation.
+# PROTOTYPE NOTE: static analyzer should reuse equivalent logic by scanning
+# adjacent instruction dependencies.
 def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     """
     Detect a load-use hazard requiring a stall bubble.
@@ -72,10 +137,24 @@ def needs_stall(ID_EX: dict, EX_MEM: dict) -> bool:
     Returns:
         bool: True if a stall bubble must be inserted
     """
-    # TODO: Person 5 implements this
-    raise NotImplementedError("Person 5: implement needs_stall()")
+    # Check if current instruction is a load
+    if not EX_MEM.get('mem_read', False):
+        return False
+
+    load_dest = EX_MEM.get('write_reg')
+    src1 = ID_EX.get('rs')
+    src2 = ID_EX.get('rt')
+
+    # Check for hazard
+    if load_dest == src1 or load_dest == src2:
+        return True
+
+    return False
 
 
+# CURRENT FUNCTION: control hazard flush decision.
+# PROTOTYPE NOTE: if analyzer includes branch penalties, use static branch count
+# and explicit policy constants.
 def needs_flush(EX_MEM: dict) -> bool:
     """
     Detect a branch-taken condition requiring a pipeline flush.
@@ -90,10 +169,16 @@ def needs_flush(EX_MEM: dict) -> bool:
     Returns:
         bool: True if IF/ID and ID/EX should be flushed (replaced with NOPs)
     """
-    # TODO: Person 5 implements this
-    raise NotImplementedError("Person 5: implement needs_flush()")
+    #If its a branch it  need to be flushed
+    if EX_MEM.get('branch', True):  
+        return True
+    
+    # the ALU zero flag will not be a factor since it returns true for both
+    return False
 
 
+# CURRENT FUNCTION: forwarding path selection in dynamic simulation.
+# PROTOTYPE NOTE: analyzer mode typically only needs aggregate stall impact.
 def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
     """
     Determine forwarding paths for ALU inputs A and B.
@@ -118,8 +203,29 @@ def forwarding_unit(ID_EX: dict, EX_MEM: dict, MEM_WB: dict) -> tuple:
         tuple: (forward_a: str, forward_b: str)
                Each is one of "REG", "EX_MEM", "MEM_WB"
     """
-    # TODO: Person 5 implements this
-    raise NotImplementedError("Person 5: implement forwarding_unit()")
+    
+    forwardA = "REG" # No Forwarding
+    forwardB = "REG" # No Forwarding
+    # ---------- Forward A (uses rs) ----------
+    if EX_MEM["reg_write"] and EX_MEM["write_reg"] != 0:
+        if EX_MEM["write_reg"] == ID_EX["rs"]:
+            forwardA = "EX_MEM" # Forward from EX stage
+
+    if MEM_WB["reg_write"] and MEM_WB["write_reg"] != 0:
+        if (MEM_WB["write_reg"] == ID_EX["rs"]) and forwardA == 0: # So its only used after EX stage 
+            forwardA = "MEM_WB" # Forward from MEM stage
+
+    # ---------- Forward B (uses rt) ----------
+    if EX_MEM["reg_write"] and EX_MEM["write_reg"] != 0:
+        if EX_MEM["write_reg"] == ID_EX["rt"]:
+            forwardB = "EX_MEM" # Forward from EX stage
+
+    if MEM_WB["reg_write"] and MEM_WB["write_reg"] != 0:
+        if (MEM_WB["write_reg"] == ID_EX["rt"]) and forwardB == 0:  # So its only used after EX stage 
+            forwardB = "MEM_WB" # Forward from MEM stage
+
+    return (forwardA, forwardB)
+
 
 
 # ─────────────────────────────────────────────
