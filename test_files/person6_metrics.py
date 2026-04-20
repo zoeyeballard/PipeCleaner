@@ -316,7 +316,7 @@ def _pipeline_metrics_fallback(instructions, single_metrics):
         "pipelined_cycles": total_cycles,
     }
 
-USE_STUBS = True
+USE_STUBS = False
 
 if not USE_STUBS:
     from person3_single_cycle import run_single_cycle

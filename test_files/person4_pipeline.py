@@ -170,7 +170,7 @@ def run_pipeline_analyzer(instructions, timing_ps=None, assumed_branch_penalty=0
 # STUBS / REAL IMPORTS
 # ─────────────────────────────────────────────
 
-USE_STUBS = True
+USE_STUBS = False
 
 if not USE_STUBS:
     from rolandoU_alu import alu_execute, register_read, register_write, sign_extend

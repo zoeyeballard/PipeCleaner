@@ -28,7 +28,7 @@ from common import (
 )
 
 # ── Toggle this while Person 1 & 2 are still building ──
-USE_STUBS = True
+USE_STUBS = False
 
 if not USE_STUBS:
     from person1_parser import parse_program
