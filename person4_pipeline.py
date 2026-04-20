@@ -29,7 +29,7 @@ def _estimate_pipeline_cycles(total_instructions, stall_cycles, n_stages=5):
     return base_cycles + stall_cycles
 
 #Testing without other modules
-USE_STUBS = True
+USE_STUBS = False
 
 if not USE_STUBS:
     from person3_single_cycle import alu_execute, register_read, register_write, sign_extend, DEFAULT_TIMING_PS
