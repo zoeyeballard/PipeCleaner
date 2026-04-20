@@ -27,7 +27,7 @@ from common import (
     make_instruction,
 )
 
-# ── Toggle this while Person 1 & 2 are still building ──
+# Toggle this while Person 1 & 2 are still building
 USE_STUBS = False
 
 if not USE_STUBS:
@@ -66,13 +66,7 @@ else:
         return imm
 
 
-# ─────────────────────────────────────────────
-# TIMING CONSTANTS
-# ─────────────────────────────────────────────
-
-# Per-instruction-type latency in picoseconds for the analytical mode.
-# The single-cycle clock period is the MAX of these values, because the
-# critical path must accommodate the slowest instruction class.
+# set up dictionary of how long each instruction type takes in picoseconds, based on hardware stages
 DEFAULT_TIMING_PS = {
     "lw":    800,   # IF + ID + EX (add) + MEM read + WB  — longest path
     "sw":    700,   # IF + ID + EX (add) + MEM write       — no WB reg write
@@ -81,11 +75,7 @@ DEFAULT_TIMING_PS = {
     "other": 600,   # catch-all (addi, j, bne, nop, …)
 }
 
-
-# ─────────────────────────────────────────────
-# CLASSIFY INSTRUCTION
-# ─────────────────────────────────────────────
-
+# maps instruction dict to one of five timing categories aboard
 def classify_instruction(instr: dict) -> str:
     """
     Map an instruction dict to one of the timing categories used by the analyzer.
@@ -115,11 +105,7 @@ def classify_instruction(instr: dict) -> str:
         return "beq"
     return "other"
 
-
-# ─────────────────────────────────────────────
-# ANALYTICAL (NON-SIMULATION) ANALYZER
-# ─────────────────────────────────────────────
-
+# computes performance numbers w/o simulating program execution
 def run_single_cycle_analyzer(instructions: list, timing_ps: dict = None) -> dict:
     """
     Compute single-cycle performance metrics analytically — without executing
@@ -147,22 +133,22 @@ def run_single_cycle_analyzer(instructions: list, timing_ps: dict = None) -> dic
             throughput_instr_per_ps (float) — instructions per picosecond
             timing_ps               (dict)  — the timing table actually used
     """
+    # use DEFAULT_TIMING_PS if no custom timing provided; ensures all categories are present
     timing = timing_ps if timing_ps is not None else DEFAULT_TIMING_PS
 
-    # ── Count instructions by category ───────────────────────────────────────
+    # count instructions by category and determine how much of each type
     counts: dict = {cat: 0 for cat in timing}
     for instr in instructions:
         cat = classify_instruction(instr)
         counts[cat] = counts.get(cat, 0) + 1
 
+    # compute total instructions
     total_instructions = len(instructions)
 
-    # ── Derive clock period ───────────────────────────────────────────────────
-    # Single-cycle: one global clock period = worst-case (max) instruction time.
-    # Every instruction — fast or slow — waits for this period to expire.
+    # derive the total clock period from the slowest instruction category in this program
     clock_period_ps = max(timing.values()) if timing else 0
 
-    # ── Aggregate timing ──────────────────────────────────────────────────────
+    # Calculate total execution time and derived metrics based on single-cycle assumptions
     total_cycles    = total_instructions          # CPI = 1.0 always
     total_time_ps   = clock_period_ps * total_instructions
 
@@ -170,6 +156,7 @@ def run_single_cycle_analyzer(instructions: list, timing_ps: dict = None) -> dic
     avg_latency_ps  = float(total_time_ps / total_instructions) if total_instructions else 0.0
     throughput      = (1.0 / clock_period_ps) if clock_period_ps else 0.0  # instr/ps
 
+    # return all numbers as dictionary
     return {
         "instruction_counts":       counts,
         "total_instructions":       total_instructions,
@@ -182,11 +169,7 @@ def run_single_cycle_analyzer(instructions: list, timing_ps: dict = None) -> dic
         "timing_ps":                timing,
     }
 
-
-# ─────────────────────────────────────────────
-# PUBLIC API — SIMULATION MODE
-# ─────────────────────────────────────────────
-
+# simulation mode: steps through program cycle by cycle and executes each instruction
 def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
     """
     Execute a MIPS program in single-cycle mode.
@@ -292,13 +275,14 @@ def run_single_cycle(instructions: list, initial_state: dict = None) -> tuple:
 # HELPERS
 # ─────────────────────────────────────────────
 
+# helps check if PC is valid index or returns NOP if out of bounds
 def _fetch(instructions: list, pc: int) -> dict:
     """Return instruction at index pc, or a NOP if out of bounds."""
     if 0 <= pc < len(instructions):
         return instructions[pc]
     return make_instruction("nop", "R")
 
-
+# handles data memory access for LW and SW; returns value read for LW, or alu_result for SW/other
 def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: int) -> int:
     """
     Handle LW and SW memory operations.
@@ -320,7 +304,7 @@ def _memory_access(cpu_state: dict, instr: dict, alu_result: int, write_data: in
         return alu_result
     return alu_result
 
-
+# determines next PC after each instruction
 def _compute_next_pc(pc: int, instr: dict, zero_flag: bool, alu_result: int) -> int:
     """
     Determine the next PC value after this instruction.
