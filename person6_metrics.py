@@ -25,54 +25,50 @@ TESTING:
     Run this file directly: python person6_metrics.py
 """
 
+# IMPORT necessary libraries
 from pathlib import Path
 import argparse
 
 from common import make_metrics
 
-# -----------------------------------------------------------------------------
-# PROTOTYPE MIGRATION NOTES (main branch scaffold only)
-# -----------------------------------------------------------------------------
-# This file currently compares simulator logs.
-# To match the prototype analyzer branch and professor sample output, add:
-# - project3-style formatter (Processed N file(s), counts, mode sections)
-# - per-file analyzer driver
-# - CLI for single file and --all directory mode
-# - throughput conversion to instr/s using picosecond totals
-#
-# Recommended additional top-level functions are scaffolded below.
-
-
+# BUILDS final formatted text in example format provided
 def format_project3_style_report(file_name, instructions, single_metrics, pipeline_metrics):
     """
     Format output in the project3-style layout used by the analyzer prototype.
     """
     from person3_single_cycle import classify_instruction, DEFAULT_TIMING_PS
 
+    # CREATE small helper to safely look up value from metrics dictionary
     def metric_get(metrics, *keys, default=0.0):
         for key in keys:
             if key in metrics and metrics[key] is not None:
                 return metrics[key]
         return default
 
+    # initialize counts for instructions
     counts = {"lw": 0, "sw": 0, "R": 0, "beq": 0, "other": 0}
+    
+    # Go through all instructions, classify (using person 3), and count
     for instr in instructions:
         cat = classify_instruction(instr)
         if cat not in counts:
             cat = "other"
         counts[cat] += 1
 
+    # Total instruction count
     total = len(instructions)
 
-    # Match prototype non-pipeline mode: sum per-instruction latencies.
+    # Non-pipelined: Adds execution time for each instruction based on predefined constants
     nonpipe_total_time_ps = 0.0
     for instr in instructions:
         cat = classify_instruction(instr)
         if cat not in DEFAULT_TIMING_PS:
             cat = "other"
-        nonpipe_total_time_ps += DEFAULT_TIMING_PS[cat]
+        nonpipe_total_time_ps += DEFAULT_TIMING_PS[cat] # total time in picoseconds for non-pipelined execution
+    # Average latency = total time / total instruction count
     nonpipe_latency_ps = (nonpipe_total_time_ps / total) if total else 0.0
 
+    # pulls values from metrics dicts
     single_clock_ps = metric_get(
         single_metrics,
         "single_cycle_clock_ps",
@@ -80,13 +76,19 @@ def format_project3_style_report(file_name, instructions, single_metrics, pipeli
         default=max(DEFAULT_TIMING_PS["lw"], DEFAULT_TIMING_PS["sw"], DEFAULT_TIMING_PS["R"], DEFAULT_TIMING_PS["beq"]),
     )
 
+    # Pipelined: Adds up total time based on total cycles and pipelined clock period
+    # total time calculation: total_cycles * pipelined_clock_ps
     pipeline_total_time_ps = metric_get(pipeline_metrics, "total_time_ps", "latency", default=0.0)
+    # Average latency = total time / total instruction count
     pipeline_latency_ps = metric_get(pipeline_metrics, "latency_ps", "avg_latency_ps", default=0.0)
+    # Pipelined clock period: use single-cycle clock divided by 5 as a heuristic if not provided
     pipelined_clock_ps = metric_get(pipeline_metrics, "pipelined_clock_ps", default=single_clock_ps / 5.0 if single_clock_ps else 0.0)
 
+    # For both nonpipelined and pipelined, calculate throughput in instructions per second (IPS)
     nonpipe_throughput = _throughput_instr_per_sec(total, nonpipe_total_time_ps)
     pipe_throughput = _throughput_instr_per_sec(total, pipeline_total_time_ps)
 
+    # begin assembling output lines
     lines = []
     lines.append(f"Processed 1 file(s): ['{file_name}']")
     lines.append("")
@@ -121,7 +123,7 @@ def format_project3_style_report(file_name, instructions, single_metrics, pipeli
 
     return "\n".join(lines)
 
-
+# Take in one .asm file and run full analysis pipeline on it
 def analyze_file(file_path):
     """Parse one file and return project3-style report + both metrics dicts."""
     from person1_parser import parse_program as real_parse_program
@@ -131,14 +133,15 @@ def analyze_file(file_path):
     )
     from person4_pipeline import run_pipeline as real_run_pipeline
 
+    # take in file and parse using person 1's parser program
     source = Path(file_path).read_text(encoding="utf-8")
     instructions = real_parse_program(source)
 
-    # Prefer analyzer mode (prototype behavior) to avoid requiring full
-    # simulator execution for reporting-only workflows.
     try:
+        # run single cycle analysis from person 3
         analysis = real_run_single_cycle_analyzer(instructions)
         single_log = []
+        # add to metrics dict based on analysis results from person 3's analyzer
         single_metrics = {
             "total_instructions": analysis.get("total_instructions", len(instructions)),
             "total_cycles": analysis.get("total_cycles", len(instructions)),
@@ -156,6 +159,7 @@ def analyze_file(file_path):
         _, single_log, single_metrics = real_run_single_cycle(instructions)
 
     try:
+        # run pipelined cycle analysis from person 4 and add metrics
         _, pipeline_log, pipeline_metrics = real_run_pipeline(instructions)
     except Exception:
         pipeline_log = []
@@ -177,7 +181,7 @@ def analyze_file(file_path):
     )
     return report, single_metrics, pipeline_metrics
 
-
+# scans a folder to return sorted list of all .asm files in it -> returns empty list if folder does not exist
 def discover_input_files(target_dir):
     """Return sorted .asm files from target directory."""
     root = Path(target_dir)
@@ -192,7 +196,7 @@ def discover_input_files(target_dir):
             files.append(str(p))
     return files
 
-
+# Handles running program from command line including additional arguments
 def run_cli(argv=None):
     """CLI entry point for single-file and all-files analyzer execution."""
     parser = argparse.ArgumentParser(description="MIPS Pipelined Performance Analyzer")
@@ -228,14 +232,14 @@ def run_cli(argv=None):
 
     return 0
 
-
+# Converts picoseconds to seconds, divides total instructions by total time to get IPS
 def _throughput_instr_per_sec(total_instructions, total_time_ps):
     """Convert instruction/time totals into instructions per second."""
     if total_time_ps <= 0:
         return 0.0
     return total_instructions / (total_time_ps * 1e-12)
 
-
+# Given instruction, returns set of registers it reads from, used to detect hazards
 def _read_regs(instr):
     op = instr.get("op", "")
     rs = instr.get("rs", 0)
@@ -247,7 +251,7 @@ def _read_regs(instr):
         return {rs}
     return set()
 
-
+# Returns which register an instruction writes to
 def _write_reg(instr):
     op = instr.get("op", "")
     if op in {"add", "sub", "and", "or", "slt"}:
@@ -256,7 +260,7 @@ def _write_reg(instr):
         return instr.get("rt", 0)
     return 0
 
-
+# fallback if person 5 hazard analyzer is unavailable — counts RAW and load-use hazards by scanning instruction list
 def _analyze_hazards_fallback(instructions):
     raw_hazards = 0
     load_use_hazards = 0
@@ -282,7 +286,7 @@ def _analyze_hazards_fallback(instructions):
         "stall_cycles": load_use_hazards,
     }
 
-
+# fallback if person 4 pipeline simulator is unavailable — estimates pipeline metrics based on instruction counts and hazard analysis
 def _pipeline_metrics_fallback(instructions, single_metrics):
     n = len(instructions)
     single_clock_ps = single_metrics.get("single_cycle_clock_ps", 0.0)
@@ -316,6 +320,7 @@ def _pipeline_metrics_fallback(instructions, single_metrics):
         "pipelined_cycles": total_cycles,
     }
 
+# Turn true to use stub functions
 USE_STUBS = False
 
 if not USE_STUBS:
@@ -356,15 +361,7 @@ else:
         m["cpi"]                = m["total_cycles"] / n
         return make_cpu_state(), log, m
 
-
-# ─────────────────────────────────────────────
-# TEST PROGRAMS
-# (write these first — everyone uses them)
-# ─────────────────────────────────────────────
-
-# CURRENT FUNCTION: shared simulator test programs.
-# PROTOTYPE NOTE: keep for simulator validation; analyzer CLI should consume
-# professor-provided files directly.
+# shared test programs for all team members, returns dict of MIPs assembly strings
 def get_test_programs() -> dict:
     """
     Shared test programs for all team members.
@@ -441,13 +438,7 @@ def get_test_programs() -> dict:
     }
 
 
-# ─────────────────────────────────────────────
-# METRICS COMPUTATION
-# ─────────────────────────────────────────────
-
-# CURRENT FUNCTION: computes metrics from simulator logs.
-# PROTOTYPE NOTE: analytical mode may bypass logs and compute metrics directly
-# from counts and timing constants.
+# computes metrics from a log of execution events, using formulas defined in docstring <- used for previous iteration
 def compute_metrics(log: list, total_instructions: int, clock_period_ns: float = 1.0) -> dict:
     """
     Compute performance metrics from an execution log.
@@ -491,9 +482,7 @@ def compute_metrics(log: list, total_instructions: int, clock_period_ns: float =
     return m
 
 
-# CURRENT FUNCTION: compares simulator outputs.
-# PROTOTYPE NOTE: retain for compatibility; analyzer branch may compare direct
-# analytical metric dictionaries instead.
+# compare output between simulators <- used for previous iteration
 def compare_simulators(
     single_log: list,
     pipeline_log: list,
@@ -545,8 +534,7 @@ def compare_simulators(
     }
 
 
-# CURRENT FUNCTION: simulator-style table printer.
-# PROTOTYPE CHANGE: add project3-style print path for grading output parity.
+# print a formatted side-by-side comparison report to stdout <- used for previous iteration
 def print_report(comparison: dict, program_name: str = "test") -> None:
     """
     Print a formatted side-by-side comparison report to stdout.
